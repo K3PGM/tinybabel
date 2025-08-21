@@ -844,7 +844,35 @@ function hasUSBPower()
         return true;
     }
     return false;
+};
+
+export function isLowMemNode()
+{
+    const f = fs.open("/proc/meminfo");
+    if (f) {
+        const l = f.read("line");
+        f.close();
+        const m = match(l, /([0-9]+)/);
+        if (m && int(m[1]) <= 32768) {
+            return true;
 }
+    }
+    return false;
+};
+
+export function is64MemNode()
+{
+    const f = fs.open("/proc/meminfo");
+    if (f) {
+        const l = f.read("line");
+        f.close();
+        const m = match(l, /([0-9]+)/);
+        if (m && int(m[1]) > 32768 && int(m[1]) <= 65536) {
+            return true;
+        }
+    }
+    return false;
+};
 
 export function getHardwareType()
 {
