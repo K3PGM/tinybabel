@@ -31,6 +31,7 @@
 746-rocket-m-xw-support.patch
 747-mikrotik-extra-support.patch
 748-powerbeam-m5-300-support.patch
+749-fix-tiny.patch
 749-ubiquiti-extra-support.patch
 749-ubiquiti-firmware-version.patch
 750-ibss-2g-fix.patch
