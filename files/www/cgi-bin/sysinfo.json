@@ -83,7 +83,7 @@ const info = strip({
         mesh_supernode: c.get("aredn", "@supernode[0]", "enable") == "1"
     }),
     tunnels: {
-        active_tunnel_count: tonumber(capture("wg | grep interface | wc -l"))
+        active_tunnel_count: (fs.access("/usr/bin/wg") ? tonumber(capture("wg | grep interface | wc -l")) : 0) 
     },
     lat: tonumber(c.get("aredn", "@location[0]", "lat")),
     lon: tonumber(c.get("aredn", "@location[0]", "lon")),
