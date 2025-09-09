@@ -649,7 +649,7 @@ function supportsMaxDistance(wifiIface)
     }
 }
 
-export function getHTMode(wifiIface, bandwidth)
+export function getHTMode(wifiIface, bandwidth, mode)
 {
     const phy = getPhyDevice(wifiIface);
     let htmode = "NOHT";
@@ -661,8 +661,13 @@ export function getHTMode(wifiIface, bandwidth)
             case 5:
             case 10:
             case 20:
-                if (fs.access("/lib/firmware/ath10k/QCA9888")) {
-                    htmode = "NOHT";
+                if (fs.access("/lib/firmware/ath10k/QCA9888") || fs.access("/lib/firmware/ath10k/QCA4019")) {
+                    if (mode === "mesh") {
+                        htmode = "NOHT";
+                    }
+                    else {
+                        htmode = "HT20";
+                    }
                 }
                 else {
                     htmode = "VHT20";
@@ -1057,6 +1062,20 @@ export function supportsFeature(feature, arg1, arg2)
             }
         case "boot-efi":
             return !!fs.access("/sys/firmware/efi");
+        case "supernode":
+            switch (getBoardModel().id) {
+                case "mikrotik,hap-ac2":
+                case "mikrotik,hap-ac3":
+                case "glinet,gl-b1300":
+                case "openwrt,one":
+                case "qemu":
+                case "vmware":
+                case "bhyve":
+                case "pc":
+                    return true;
+                default:
+                    return false;
+            }
         default:
             return false;
     }
