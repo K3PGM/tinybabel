@@ -1295,7 +1295,7 @@
     },
     "wlan1": {
       "exclude_bandwidths": [ 5, 10 ],
-      "exclude_modes": [ "mesh", "meshap", "meshptp", "meshsta" ],
+      "exclude_modes": [ "meshap", "meshptp", "meshsta" ],
       "maxpower": 20,
       "antenna": {
         "description": "3.5 dBi Omni",
@@ -1325,8 +1325,8 @@
       }
     },
     "timeouts": {
-      "reboot": [ 60, 240 ],
-      "upgrade": [ 240, 600 ]
+      "reboot": [ 60, 300 ],
+      "upgrade": [ 240, 720 ]
     }
   },
   "alfa network tube-ahm r0c": {
@@ -1343,8 +1343,8 @@
       "disabled": true
     },
     "timeouts": {
-      "reboot": [ 60, 240 ],
-      "upgrade": [ 240, 600 ]
+      "reboot": [ 60, 300 ],
+      "upgrade": [ 240, 720 ]
     }
   },
   "qemu": {
