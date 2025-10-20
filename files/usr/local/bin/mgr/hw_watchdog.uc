@@ -43,7 +43,7 @@ let tick = 60;
 const pingTimeout = 3;
 const startupDelay = 600;
 const maxLastPing = 300;
-const maxWatchdogTimeout = 600;
+const minWatchdogTimeout = 15;
 
 // Set of daemons to monitor
 const defaultDaemons = "dnsmasq telnetd dropbear uhttpd babeld";
@@ -118,15 +118,14 @@ function getConfig(verbose)
 
 function main()
 {
-    const now = clock()[0];
-    const uptime = clock(true)[0];
+    const now = clock(true)[0];
     let success = true;
     const config = getConfig();
 
     // Reboot a device daily at a given time if configured.
     // To avoid rebooting at the wrong time we will only do this if the node has been running
     // for > 1 hour, and the time has been set by ntp of gps
-    if (config.daily != -1 && uptime >= 3600 && fs.access("/tmp/timesync")) {
+    if (config.daily != -1 && now >= 3600 && fs.access("/tmp/timesync")) {
         const tm = localtime();
         let timediff = (tm.min + tm.hour * 60) - config.daily;
         if (timediff < 0) {
@@ -193,7 +192,7 @@ function main()
         log.syslog(log.LOG_ERR, "failed");
     }
 
-    return waitForTicks(max(0, tick - (clock()[0] - now)));
+    return waitForTicks(max(0, tick - (clock(true)[0] - now)));
 }
 
 // Gracefully shutdown the watchdog
@@ -218,11 +217,17 @@ return waitForTicks(max(0, startupDelay - clock(true)[0]), function() {
         return exitApp();
     }
 
-    // Try to set the watchdog timeout, then make sure we tick no less than twice per timeout period
-    const settime = struct.pack("I", maxWatchdogTimeout);
-    wd.ioctl(fs.IOC_DIR_RW, WATCHDOG_IOCTL_BASE, WDIOC_SETTIMEOUT, settime);
+    // We cannot reliably set the timeout so we are forced to work with whatever the default value is.
+    // If the value is too small we disable the watchdog.
     const gettime = struct.unpack("I", wd.ioctl(fs.IOC_DIR_READ, WATCHDOG_IOCTL_BASE, WDIOC_GETTIMEOUT, 4))[0];
     tick = min(tick, int(gettime / 2));
+    if (tick < minWatchdogTimeout) {
+        log.syslog(log.LOG_ERROR, `tick ${tick} < ${minWatchdogTimeout}, disabling watchdog`);
+        wd.write("V");
+        wd.flush();
+        wd.close();
+        return exitApp();
+    }
     log.syslog(log.LOG_DEBUG, `tick set to ${tick}`);
 
     return main;
