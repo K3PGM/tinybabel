@@ -210,6 +210,7 @@ function main()
     let now = 0;
     let previousnow = 0;
     const radioMode = device ? uci.cursor("/etc/config.mesh").get("setup", "globals", `${radio}_mode`) : "off";
+    const start = clock(true)[0];
 
     updateConfig();
 
@@ -282,7 +283,8 @@ function main()
                             device: m[2],
                             mac: mac,
                             ipv6ll: m[1],
-                            refresh: 0
+                            refresh: 0,
+                            avg_lq: 100
                         };
                         if (type === "RF") {
                             track.mode = radioMode;
@@ -297,6 +299,7 @@ function main()
                         if (rtt) {
                             track.rtt = int(rtt[1]);
                         }
+                        track.avg_lq = min(100, 0.9 * track.avg_lq + 0.1 * track.lq);
                     }
                 }
             }
@@ -468,7 +471,7 @@ function main()
                         else {
                             for (let i = 0; i < length(info.interfaces); i++) {
                                 const iface = info.interfaces[i];
-                                if (iface.mac && lc(iface.mac) === track.mac) {
+                                if (iface.mac && lc(iface.mac) === track.mac && iface.ip) {
                                     track.ip = iface.ip;
                                     break;
                                 }
@@ -558,8 +561,8 @@ function main()
             track.babel_metric = null;
             track.routable = false;
 
-            if (track.ip) {
-                ip2tracker[track.ip] = track;
+            if (track.ip || track.canonical_ip) {
+                ip2tracker[track.ip || track.canonical_ip] = track;
             }
 
             // Refresh user blocks
@@ -586,7 +589,7 @@ function main()
                 }
             }
             else if (track.type === "Xlink") {
-                track.babel_config.rxcost = tonumber(cursor.get("babel", "xlink", "rxcost"));
+                track.babel_config.rxcost = int(cursor.get("babel", "xlink", "rxcost"));
                 let weight = null;
                 for (let x = 0; x < 16; x++) {
                     if (cursor.get("network", `xlink${x}`, "ifname") == track.device) {
@@ -767,6 +770,7 @@ function main()
 
             // Save this for the UI
             fs.writefile("/tmp/lqm.info", sprintf("%.2J", {
+                start: start,
                 now: now,
                 trackers: trackers,
                 distance: distance,

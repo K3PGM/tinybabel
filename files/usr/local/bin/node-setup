@@ -562,7 +562,7 @@ for (let i = 0; i < length(cnetworks); i++) {
 // Generate the tunnel configurations
 let wg_begin = cm.get("wireguard", "@network[0]", "begin");
 if (is_supernode && wg_begin && match(wg_begin, /^172\.31\./)) {
-    wg_begin = `172.30.${substr(wg_begin, 8)}`;
+    wg_begin = `172.30.${substr(wg_begin, 7)}`;
     cm.set("wireguard", "@network[0]", "begin", wg_begin);
     cm.commit("wireguard");
 }
@@ -571,41 +571,45 @@ let wgclients = 0;
 cm.foreach("wireguard", "client",
     function(s) {
         const m1 = match(s.key, /^(.+=)(.+=)(.+=)(.+=)$/);
-        const server_priv = m1[1];
-        const client_pub = m1[4];
         const m2 = match(s.clientip, /^(\d+\.\d+\.\d+\.\d+):(\d+)$/);
-        const addr = m2[1];
-        const port = m2[2];
-        const abcd = iptoarr(addr);
-        const ll = network.mac2ipv6ll(sprintf("00:00:%02x:%02x:%02x:%02x", abcd[0], abcd[1], abcd[2], abcd[3])) + "/64";
-        const w = s.cost || def_tun_cost;
-        cfg.wireguard_network_config += sprintf("config interface 'wgc%d'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\toption listen_port '%s'\n\tlist addresses '%s'\n\tlist addresses '%s'\n\toption disabled '%s'\n\n",
-            wgclients, server_priv, w, port, addr, ll, (s.enabled == 1 ? "0" : "1"));
-        cfg.wireguard_network_config += sprintf("config wireguard_wgc%d 'wireguard_wgc%d'\n\toption public_key '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
-            wgclients, wgclients, client_pub);
-        cfg.vpn_interfaces += `\tlist network 'wgc${wgclients}'\n`;
-        wgclients++;
+        if (m1 && m2) {
+            const server_priv = m1[1];
+            const client_pub = m1[4];
+            const addr = m2[1];
+            const port = m2[2];
+            const abcd = iptoarr(addr);
+            const ll = network.mac2ipv6ll(sprintf("00:00:%02x:%02x:%02x:%02x", abcd[0], abcd[1], abcd[2], abcd[3])) + "/64";
+            const w = s.cost || def_tun_cost;
+            cfg.wireguard_network_config += sprintf("config interface 'wgc%d'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\toption listen_port '%s'\n\tlist addresses '%s'\n\tlist addresses '%s'\n\toption disabled '%s'\n\n",
+                wgclients, server_priv, w, port, addr, ll, (s.enabled == 1 ? "0" : "1"));
+            cfg.wireguard_network_config += sprintf("config wireguard_wgc%d 'wireguard_wgc%d'\n\toption public_key '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
+                wgclients, wgclients, client_pub);
+            cfg.vpn_interfaces += `\tlist network 'wgc${wgclients}'\n`;
+            wgclients++;
+        }
     }
 );
 let wgservers = 0;
 cm.foreach("wireguard", "server",
     function(s) {
         const m1 = match(s.passwd, /^(.+=)(.+=)(.+=)$/);
-        const server_pub = m1[1];
-        const client_priv = m1[2];
-        const client_pub = m1[3];
         const m2 = match(s.netip, /^(\d+\.\d+\.\d+\.\d+):(\d+)/);
-        const addr = m2[1];
-        const abcd = iptoarr(addr);
-        const p = m2[2];
-        const ll = network.mac2ipv6ll(sprintf("00:00:%02x:%02x:%02x:%02x", abcd[0], abcd[1], abcd[2], abcd[3] + 1)) + "/64";
-        const w = s.cost || def_tun_cost;
-        cfg.wireguard_network_config += sprintf("config interface 'wgs%d'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\tlist addresses '%d.%d.%d.%d'\n\tlist addresses '%s'\n\toption disabled '%s'\n\n",
-            wgservers, client_priv, w, abcd[0], abcd[1], abcd[2], abcd[3] + 1, ll, (s.enabled == 1 ? "0" : "1"));
-        cfg.wireguard_network_config += sprintf("config wireguard_wgs%d 'wireguard_wgs%d'\n\toption public_key '%s'\n\toption endpoint_host '%s'\n\toption endpoint_port '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
-            wgservers, wgservers, server_pub, s.host, p);
-        cfg.vpn_interfaces += `\tlist network 'wgs${wgservers}'\n`;
-        wgservers++;
+        if (m1 && m2) {
+            const server_pub = m1[1];
+            const client_priv = m1[2];
+            const client_pub = m1[3];
+            const addr = m2[1];
+            const abcd = iptoarr(addr);
+            const p = m2[2];
+            const ll = network.mac2ipv6ll(sprintf("00:00:%02x:%02x:%02x:%02x", abcd[0], abcd[1], abcd[2], abcd[3] + 1)) + "/64";
+            const w = s.cost || def_tun_cost;
+            cfg.wireguard_network_config += sprintf("config interface 'wgs%d'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\tlist addresses '%d.%d.%d.%d'\n\tlist addresses '%s'\n\toption disabled '%s'\n\n",
+                wgservers, client_priv, w, abcd[0], abcd[1], abcd[2], abcd[3] + 1, ll, (s.enabled == 1 ? "0" : "1"));
+            cfg.wireguard_network_config += sprintf("config wireguard_wgs%d 'wireguard_wgs%d'\n\toption public_key '%s'\n\toption endpoint_host '%s'\n\toption endpoint_port '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
+                wgservers, wgservers, server_pub, s.host, p);
+            cfg.vpn_interfaces += `\tlist network 'wgs${wgservers}'\n`;
+            wgservers++;
+        }
     }
 );
 
@@ -916,6 +920,7 @@ for (let dev = 0; dev < ifacecount; dev++) {
         let uapsd = null;
         let hwmode = null;
         let bcf = null;
+        let shortgi = null;
         let htmode = hardware.getHTMode(wlan, wlan == mesh_wifi ? mesh_chanbw : -1, cfg[`${radio}_mode`]);
 
         switch (hardware.getDefaultChannel(wlan)?.band) {
@@ -969,6 +974,7 @@ for (let dev = 0; dev < ifacecount; dev++) {
             maxinactivity = 600;
             maxlisteninterval = 1;
             uapsd = 0;
+            shortgi = 0;
             if (cfg[`${radio}_mode`] == "meshptp") {
                 macfilter = "allow";
             }
@@ -1109,6 +1115,9 @@ for (let dev = 0; dev < ifacecount; dev++) {
         }
         if (uapsd != null) {
             config += `\toption uapsd '${uapsd}'\n`;
+        }
+        if (shortgi != null) {
+            config += `\toption short_gi_20 '${shortgi}'\n\toption short_gi_40 '${shortgi}'\n`;
         }
 
         config += "\n";
@@ -1269,6 +1278,9 @@ if (sf) {
         }
         sf.write(`/usr/sbin/iw ${hardware.getPhyDevice(mesh_wifi)} set txpower fixed 0\n`);
         sf.write(`/usr/sbin/iw ${hardware.getPhyDevice(mesh_wifi)} set txpower fixed ${mesh_txpower}00\n`);
+        if (hardware.getDefaultChannel(mesh_wifi)?.band === "HaLow") {
+            sf.write("/sbin/morse_cli ampdu enable\n");
+        }
     }
     sf.close();
     if (filecopy("/tmp/local_services", "/etc/local/services")) {
@@ -1412,6 +1424,7 @@ for (let file in nfiles) {
             }
             case "network":
                 changes.network = true;
+                changes.babel = true;
                 changes.lqm = true; // and lqm because device assignment could change
                 break;
             case "dhcp":

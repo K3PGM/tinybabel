@@ -42,6 +42,9 @@ import * as network from "aredn.network";
 const validation_timeout = 150 * 60; // 2.5 hours (so must fail 3 times in a row)
 const validation_state = "/tmp/service-validation-state.json";
 
+const pubsubbase = "/etc/arednlink";
+const allpubsubbase = "/var/run/arednlink";
+
 export function get(validate)
 {
     const names = [];
@@ -211,7 +214,7 @@ export function get(validate)
             if (m) {
                 const proto = m[1];
                 let hostname = m[2];
-                let port = m[3];
+                let port = int(m[3]);
                 const path = m[4];
                 const vs = vstate[lc(hostname)];
                 if (!vs || vs > now || dmz_mode == "0") {
@@ -254,17 +257,27 @@ export function get(validate)
                         }
                     }
                     else {
+                        function hostname2ip(hostname)
+                        {
+                            hostname = lc(hostname);
+                            for (let i = 0; i < length(hosts); i++) {
+                                if (lc(hosts[i].host) == hostname) {
+                                    return hosts[i].ip;
+                                }
+                            }
+                            return null;
+                        }
                         // valid port, but we dont know the protocol (we cannot trust the one defined in the services file because the UI wont set
                         // anything but 'tcp'). Check both tcp and udp and assume valid it either is okay
                         let sock = socket.create(socket.AF_INET, socket.SOCK_STREAM, 0);
-                        sock.setopt(socket.SOL_SOCKET, socket.SOL_SNDTIMEO, 2);
+                        sock.setopt(socket.SOL_SOCKET, socket.SO_SNDTIMEO, { tv_sec: 2, tv_usec: 0 });
                         const n = nat ? nat[`${lc(hostname)}:tcp:${port}`] : null;
                         let r;
                         if (n) {
-                            r = sock.connect(n.hostname, n.port);
+                            r = sock.connect(hostname2ip(n.hostname), n.port);
                         }
                         else {
-                            r = sock.connect(hostname, port);
+                            r = sock.connect(hostname2ip(hostname), port);
                         }
                         sock.close();
                         if (r) {
@@ -274,19 +287,18 @@ export function get(validate)
                         else {
                             // udp
                             sock = socket.create(socket.AF_INET, socket.SOCK_DGRAM, 0);
-                            sock.setopt(socket.SOL_SOCKET, socket.SOL_RCVTIMEO, 2);
                             const n = nat ? nat[`${lc(hostname)}:udp:${port}`] : null;
                             if (n) {
-                                sock.connect(n.hostname, n.port);
+                                sock.connect(hostname2ip(n.hostname), n.port);
                             }
                             else {
-                                sock.connect(hostname, port);
+                                sock.connect(hostname2ip(hostname), port);
                             }
                             sock.send("");
-                            r = sock.recv(0);
+                            r = socket.poll(1, [ sock, socket.POLLIN|socket.POLLERR ]);
                             sock.close();
-                            if (r !== null) {
-                                // A nil response is an explicity rejection of the udp request. Otherwise we have
+                            if (!(r[0][1] & socket.POLLERR)) {
+                                // An error response is an explicity rejection of the udp request. Otherwise we have
                                 // to assume the service is valid
                                 vstate[service] = last;
                             }
@@ -345,4 +357,112 @@ export function get(validate)
 export function resetValidation()
 {
     fs.unlink(validation_state);
+};
+
+function add(pubsub, id, topic, data)
+{
+    if (id && topic && data) {
+        const f = fs.open(`${pubsubbase}/${pubsub}`, "r+");
+        if (f) {
+            try {
+                f.lock("x");
+                const info = json(f.read("all") || '{"v1":[]}');
+                for (let i = 0; i < length(info.v1); i++) {
+                    if (info.v1[i].id == id) {
+                        splice(info.v1, i, 1);
+                        break;
+                    }
+                }
+                push(info.v1, { id: id, topic: topic, data: data });
+                f.seek();
+                f.write(sprintf("%J", info));
+                f.truncate(f.tell());
+                f.lock("u");
+                f.close();
+                system(`echo "upload ${pubsub} ${pubsubbase}/${pubsub}" | socat -T 5 UNIX-CLIENT:/var/run/arednlink.sock - 2>&1 > /dev/null;`);
+                return true;
+            }
+            catch (_) {
+            }
+            f.lock("u");
+            f.close();
+        }
+    }
+    return null;
+}
+
+function remove(pubsub, id)
+{
+    const f = fs.open(`${pubsubbase}/${pubsub}`, "r+");
+    if (f) {
+        try {
+            f.lock("x");
+            const info = json(f.read("all"));
+            for (let i = 0; i < length(info.v1); i++) {
+                if (info.v1[i].id == id) {
+                    splice(info.v1, i, 1);
+                    f.seek();
+                    f.write(sprintf("%J", info));
+                    f.truncate(f.tell());
+                    f.lock("u");
+                    f.close();
+                    system(`echo "upload ${pubsub} ${pubsubbase}/${pubsub}" | socat -T 5 UNIX-CLIENT:/var/run/arednlink.sock - 2>&1 >/dev/null`);
+                    return true;
+                }
+            }
+        }
+        catch (_) {
+        }
+        f.lock("u");
+        f.close();
+    }
+    return false;
+}
+
+export function publish(id, topic, data)
+{
+    return add("publish", id, topic, data);
+};
+
+export function unpublish(id)
+{
+    return remove("publish", id);
+};
+
+function getByTopic(root, topic)
+{
+    const results = [];
+    const topicbase = substr(topic, -1) === "*" ? substr(topic, 0, -1) : null;
+    const files = fs.lsdir(root);
+    if (files) {
+        for (let i = 0; i < length(files); i++) {
+            const file = `${root}/${files[i]}`;
+            if (fs.lstat(file).size) {
+                try {
+                    const f = fs.open(file);
+                    if (f) {
+                        f.lock("s");
+                        const filedata = f.read("all");
+                        f.lock("u");
+                        f.close();
+                        const j = json(filedata);
+                        for (let i = 0; i < length(j.v1 ?? []); i++) {
+                            const t = j.v1[i].topic;
+                            if (t === topic || (topicbase && index(t, topicbase) === 0)) {
+                                push(results, j.v1[i].data);
+                            }
+                        }
+                    }
+                }
+                catch (_) {
+                }
+            }
+        }
+    }
+    return results;
+}
+
+export function published(topic)
+{
+    return getByTopic(`${allpubsubbase}/publish`, topic);
 };
