@@ -33,6 +33,7 @@
 746-rocket-m-xw-support.patch
 747-mikrotik-extra-support.patch
 748-powerbeam-m5-300-support.patch
+749-fix-tiny.patch
 749-ubiquiti-extra-support.patch
 749-ubiquiti-firmware-version.patch
 750-ibss-2g-fix.patch
@@ -47,7 +48,6 @@
 761-ucode-zlib.patch
 761-ucode-flush.patch
 780-restore-request-class.patch
-790-morsemicro-support.patch
 800-upgrade-compatibility.patch
 801-mikrotik-lhg-variants.patch
 802-gpio-typo.patch
