@@ -813,7 +813,7 @@ workflows:
       equal: [ nightly_tiny_build, << pipeline.parameters.action >> ]
     jobs:
       - check2buildtiny
-      - build_babel_prepare:
+      - build_tiny_prepare:
           requires:
             - check2buildtiny
       - build_job_ath79_tiny:
