@@ -52,9 +52,10 @@ commands:
             export MY_WORKING_DIRECTORY=`pwd`
             printf -v BUILD_DATE '%(%Y%m%d)T' -1
             sed -i "s/NoCall/tiny-${BUILD_DATE}/g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/snapshots/snapshots_tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/snapshots_tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j9/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
+            sed -i "s/downloads.arednmesh.org/downloads.k3pgm.radio/g" ${MY_WORKING_DIRECTORY}/files/etc/uci-defaults/99_canonical_config
             cat ${MY_WORKING_DIRECTORY}/config.mk
 
   update_release_config_mk:
@@ -80,9 +81,10 @@ commands:
             export MY_WORKING_DIRECTORY=`pwd`
             sed -i "s/FW_VERSION=\$(PRIVATE_BUILD_VERSION)-\$(GIT_COMMIT)/FW_VERSION=\$(PRIVATE_BUILD_VERSION)/g" ${MY_WORKING_DIRECTORY}/Makefile
             sed -i "s/NoCall/<< pipeline.parameters.release_version >>-tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/snapshots/releases\/4\/26\/<< pipeline.parameters.release_version >>-tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/releases/4/26/<< pipeline.parameters.release_version >>-tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j9/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/<< pipeline.parameters.release_version >>-tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
+            sed -i "s/downloads.arednmesh.org/downloads.k3pgm.radio/g" ${MY_WORKING_DIRECTORY}/files/etc/uci-defaults/99_canonical_config
             cat ${MY_WORKING_DIRECTORY}/config.mk
 
   create_workspace:
@@ -202,6 +204,16 @@ commands:
           command: scp -P ${SSH_PORT} -o StrictHostKeyChecking=no ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} ${SSH_USER}@${SSH_HOST2}:${TARGET_DIR}
 
   compress_and_deploy_tiny:
+    description: "Compress and Deploy"
+    steps:
+      - run:
+          name: Compress build files
+          command: tar -cjf ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} -C ${MY_WORKING_DIRECTORY}/${ARTIFACTS_DIR} .
+      - run:
+          name: Deploy Files
+          command: scp -P ${SSH_PORT} -o StrictHostKeyChecking=no ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} ${SSH_USER}@${SSH_HOST2}:${TARGET_DIR_TINY}
+
+  compress_and_deploy_release_tiny:
     description: "Compress and Deploy"
     steps:
       - run:
@@ -423,6 +435,15 @@ jobs:
       - attach_workspace:
           at: /home/aredn/project
       - compress_and_deploy_babel
+
+  build_tiny_finalize:
+    resource_class: small
+    docker:
+      - image: arednmesh/builder
+    steps:
+      - attach_workspace:
+          at: /home/aredn/project
+      - compress_and_deploy_tiny
 
   build_release:
     resource_class: xlarge
