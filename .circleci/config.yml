@@ -26,7 +26,7 @@ commands:
             export MY_WORKING_DIRECTORY=`pwd`
             printf -v BUILD_DATE '%(%Y%m%d)T' -1
             sed -i "s/NoCall/${BUILD_DATE}/g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j9/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
             cat ${MY_WORKING_DIRECTORY}/config.mk
 
   update_babel_config_mk:
@@ -39,7 +39,7 @@ commands:
             printf -v BUILD_DATE '%(%Y%m%d)T' -1
             sed -i "s/NoCall/babel-${BUILD_DATE}/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/snapshots/snapshots_babel/g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j9/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/babel/g" ${MY_WORKING_DIRECTORY}/feeds.conf
             cat ${MY_WORKING_DIRECTORY}/config.mk
 
@@ -53,7 +53,7 @@ commands:
             printf -v BUILD_DATE '%(%Y%m%d)T' -1
             sed -i "s/NoCall/tiny-${BUILD_DATE}/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/snapshots_tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j9/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
             sed -i "s/downloads.arednmesh.org/downloads.k3pgm.radio/g" ${MY_WORKING_DIRECTORY}/files/etc/uci-defaults/99_canonical_config
             cat ${MY_WORKING_DIRECTORY}/config.mk
@@ -68,7 +68,7 @@ commands:
             sed -i "s/FW_VERSION=\$(PRIVATE_BUILD_VERSION)-\$(GIT_COMMIT)/FW_VERSION=\$(PRIVATE_BUILD_VERSION)/g" ${MY_WORKING_DIRECTORY}/Makefile
             sed -i "s/NoCall/<< pipeline.parameters.release_version >>/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/snapshots/releases\/4\/26\/<< pipeline.parameters.release_version >>/g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j9/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/<< pipeline.parameters.release_version >>/g" ${MY_WORKING_DIRECTORY}/feeds.conf
             cat ${MY_WORKING_DIRECTORY}/config.mk
 
@@ -82,7 +82,7 @@ commands:
             sed -i "s/FW_VERSION=\$(PRIVATE_BUILD_VERSION)-\$(GIT_COMMIT)/FW_VERSION=\$(PRIVATE_BUILD_VERSION)/g" ${MY_WORKING_DIRECTORY}/Makefile
             sed -i "s/NoCall/<< pipeline.parameters.release_version >>-tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/releases/4/26/<< pipeline.parameters.release_version >>-tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j9/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/<< pipeline.parameters.release_version >>-tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
             sed -i "s/downloads.arednmesh.org/downloads.k3pgm.radio/g" ${MY_WORKING_DIRECTORY}/files/etc/uci-defaults/99_canonical_config
             cat ${MY_WORKING_DIRECTORY}/config.mk
@@ -303,7 +303,7 @@ jobs:
             - .
 
   build_job_ath79:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
     steps:
@@ -317,7 +317,7 @@ jobs:
             - openwrt/bin/packages/mips_24kc
 
   build_job_ath79_tiny:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
     steps:
@@ -331,7 +331,7 @@ jobs:
             - openwrt/bin/packages/mips_24kc
 
   build_job_ipq40xx:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
     steps:
@@ -345,7 +345,7 @@ jobs:
             - openwrt/bin/packages/arm_cortex-a7_neon-vfpv4
 
   build_job_x86:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
     steps:
@@ -359,7 +359,7 @@ jobs:
             - openwrt/bin/packages/x86_64
 
   build_job_ramips:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
     steps:
@@ -373,7 +373,7 @@ jobs:
             - openwrt/bin/packages/mipsel_24kc
 
   build_job_ramips_and_morse:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
     steps:
@@ -387,7 +387,7 @@ jobs:
             - openwrt/bin/packages/mipsel_24kc
 
   build_job_mediatek:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
     steps:
@@ -446,7 +446,7 @@ jobs:
       - compress_and_deploy_tiny
 
   build_release:
-    resource_class: xlarge
+    resource_class: large
     docker:
       - image: arednmesh/builder
 
