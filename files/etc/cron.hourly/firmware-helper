@@ -60,6 +60,12 @@ if (doVersionUpdate) {
             if (m) {
                 nightlyVersion = m[1];
             }
+            else {
+            	let m = match(line, /versions:.*'(tiny-[0-9]+\-[0-9a-f]+)':/);
+	            if (m) {
+	                nightlyVersion = m[1];
+	            }
+            }
             m = match(line, /default_version: "(.+)"/);
             if (m) {
                 releaseVersion = m[1];

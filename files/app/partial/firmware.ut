@@ -40,13 +40,13 @@
         message = "";
         releases = [ firmware, firmware ];
     }
-    if (match(firmware, /^\d+\.\d+\.\d+\.\d+$/)) {
+    if (match(firmware, /^(\d+\.){3}\d+(_tiny)?$/)) {
         // release
         if (firmware !== releases[0]) {
             message = "needupdate";
         }
     }
-    else if (match(firmware, /^\d\d\d\d\d\d\d\d-/) || match(firmware, /^babel-\d\d\d\d\d\d\d\d-/)) {
+    else if (match(firmware, /^(tiny-)?(babel-)?\d{8}-/)) {
         // nightly
         if (firmware !== releases[1]) {
             message = "needupdate";

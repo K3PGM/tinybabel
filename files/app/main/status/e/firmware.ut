@@ -362,7 +362,7 @@
                     ideal = releases[0];
                 }
             }
-            else if (match(firmware, /^\d\d\d\d\d\d\d\d-/) || match(firmware, /^babel-\d\d\d\d\d\d\d\d-/)) {
+            else if (match(firmware, /^(tiny-)?(babel-)?\d{8}-/)) {
                 if (firmware !== releases[1] && firmware_list[releases[1]]) {
                     ideal = releases[1];
                 }
@@ -492,12 +492,12 @@
         const firmware = configuration.getFirmwareVersion();
         let releases = split(fs.readfile("/etc/current_releases"), " ");
         if (releases) {
-            if (match(firmware, /^\d+\.\d+\.\d+\.\d+$/)) {
+            if (match(firmware, /^(\d+\.){3}\d+(_tiny)?$/)) {
                 if (firmware !== releases[0] && firmware_list[releases[0]]) {
                     ideal = releases[0];
                 }
             }
-            else if (match(firmware, /^\d\d\d\d\d\d\d\d-/) || match(firmware, /^babel-\d\d\d\d\d\d\d\d-/)) {
+            else if (match(firmware, /^(tiny-)?(babel-)?\d{8}-/)) {
                 if (firmware !== releases[1] && firmware_list[releases[1]]) {
                     ideal = releases[1];
                 }
