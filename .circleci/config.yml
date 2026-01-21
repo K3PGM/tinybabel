@@ -825,15 +825,18 @@ workflows:
       - process_tiny_artifacts_nightly:
           requires:
             - build_tiny_finalize
+      - readme_nightly:
+          requires:
+            - process_tiny_artifacts_nightly
+      - changelog_nightly:
+          requires:
+            - process_tiny_artifacts_nightly
       - afs_collector:
           requires:
             - process_tiny_artifacts_nightly
       - save_tiny_build_info:
           requires:
             - process_tiny_artifacts_nightly
-      - post_tiny_to_slack:
-          requires:
-            - afs_collector
 
   release_build:
     when:
