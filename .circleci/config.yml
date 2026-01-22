@@ -80,7 +80,7 @@ commands:
           command:  |
             export MY_WORKING_DIRECTORY=`pwd`
             sed -i "s/FW_VERSION=\$(PRIVATE_BUILD_VERSION)-\$(GIT_COMMIT)/FW_VERSION=\$(PRIVATE_BUILD_VERSION)/g" ${MY_WORKING_DIRECTORY}/Makefile
-            sed -i "s/NoCall/<< pipeline.parameters.release_version >>-tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s/NoCall/<< pipeline.parameters.release_version >>_tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/releases/4/26/<< pipeline.parameters.release_version >>_tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/<< pipeline.parameters.release_version >>_tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
@@ -651,6 +651,17 @@ jobs:
           name: Move changelog
           command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/CHANGELOG.md ${NIGHTLY_DIR}'"
 
+  changelog_nightly_tiny:
+    machine:
+      image: ubuntu-2004:2023.02.1
+    steps:
+      - run:
+          name: Generate changelog.md
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c \"github_changelog_generator -u ${CIRCLE_PROJECT_USERNAME} -p ${CIRCLE_PROJECT_REPONAME} -t ${GITHUB_TOKEN} --bug-labels __ignore__ --enhancement-labels 'enhancement,Enhancement,bug,Bug,new ui feature request,new ui,new hardware support' --enhancement-label '**Bug fixes and Enhancements:**' --no-issues-wo-labels\""
+      - run:
+          name: Move changelog
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/CHANGELOG.md ${TARGET_DIR_TINY}'"
+
   readme_nightly:
     machine:
       image: ubuntu-2004:2023.02.1
@@ -667,6 +678,23 @@ jobs:
       - run:
           name: Move SUPPORTED_DEVICES.md
           command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/SUPPORTED_DEVICES.md ${NIGHTLY_DIR}/SUPPORTED_DEVICES.md'"
+
+  readme_nightly_tiny:
+    machine:
+      image: ubuntu-2004:2023.02.1
+    steps:
+      - run:
+          name: Fetch README.md
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'wget https://raw.githubusercontent.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BRANCH}/README.md'"
+      - run:
+          name: Move README.md
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/README.md ${TARGET_DIR_TINY}/readme.md'"
+      - run:
+          name: Fetch SUPPORTED_DEVICES.md
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'wget https://raw.githubusercontent.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BRANCH}/SUPPORTED_DEVICES.md'"
+      - run:
+          name: Move SUPPORTED_DEVICES.md
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/SUPPORTED_DEVICES.md ${TARGET_DIR_TINY}/SUPPORTED_DEVICES.md'"
 
   afs_collector:
     machine:
@@ -825,10 +853,10 @@ workflows:
       - process_tiny_artifacts_nightly:
           requires:
             - build_tiny_finalize
-      - readme_nightly:
+      - readme_nightly_tiny:
           requires:
             - process_tiny_artifacts_nightly
-      - changelog_nightly:
+      - changelog_nightly_tiny:
           requires:
             - process_tiny_artifacts_nightly
       - afs_collector:
@@ -892,10 +920,10 @@ workflows:
       - process_artifacts_release_tiny:
           requires:
             - build_release_tiny_finalize
-      - readme_nightly:
+      - readme_nightly_tiny:
           requires:
             - process_artifacts_release_tiny
-      - changelog_nightly:
+      - changelog_nightly_tiny:
           requires:
             - process_artifacts_release_tiny
       - save_tiny_build_info:
