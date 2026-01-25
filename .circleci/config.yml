@@ -685,7 +685,7 @@ jobs:
           command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c \"github_changelog_generator -u ${CIRCLE_PROJECT_USERNAME} -p ${CIRCLE_PROJECT_REPONAME} -t ${GITHUB_TOKEN} --bug-labels __ignore__ --enhancement-labels 'enhancement,Enhancement,bug,Bug,new ui feature request,new ui,new hardware support' --enhancement-label '**Bug fixes and Enhancements:**' --no-issues-wo-labels\""
       - run:
           name: Move changelog
-          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/CHANGELOG.md ${TARGET_DIR_TINY}'"
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/CHANGELOG.md ${NIGHTLY_DIR_TINY}'"
 
   readme_nightly:
     machine:
@@ -713,13 +713,13 @@ jobs:
           command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'wget https://raw.githubusercontent.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BRANCH}/README.md'"
       - run:
           name: Move README.md
-          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/README.md ${TARGET_DIR_TINY}/readme.md'"
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/README.md ${NIGHTLY_DIR_TINY}/readme.md'"
       - run:
           name: Fetch SUPPORTED_DEVICES.md
           command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'wget https://raw.githubusercontent.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BRANCH}/SUPPORTED_DEVICES.md'"
       - run:
           name: Move SUPPORTED_DEVICES.md
-          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/SUPPORTED_DEVICES.md ${TARGET_DIR_TINY}/SUPPORTED_DEVICES.md'"
+          command: ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST2} "sh -c 'mv ~/SUPPORTED_DEVICES.md ${NIGHTLY_DIR_TINY}/SUPPORTED_DEVICES.md'"
 
   afs_collector:
     machine:
