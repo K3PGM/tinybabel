@@ -492,7 +492,7 @@
         const firmware = configuration.getFirmwareVersion();
         let releases = split(fs.readfile("/etc/current_releases"), " ");
         if (releases) {
-            if (match(firmware, /^(\d+\.){3}\d+(_tiny)?$/)) {
+            if (match(firmware, /^(\d+\.){3}\d+(\+tiny)?$/)) {
                 if (firmware !== releases[0] && firmware_list[releases[0]]) {
                     ideal = releases[0];
                 }

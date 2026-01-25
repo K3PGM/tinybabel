@@ -80,10 +80,10 @@ commands:
           command:  |
             export MY_WORKING_DIRECTORY=`pwd`
             sed -i "s/FW_VERSION=\$(PRIVATE_BUILD_VERSION)-\$(GIT_COMMIT)/FW_VERSION=\$(PRIVATE_BUILD_VERSION)/g" ${MY_WORKING_DIRECTORY}/Makefile
-            sed -i "s/NoCall/<< pipeline.parameters.release_version >>_tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/releases/4/26/<< pipeline.parameters.release_version >>_tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s/NoCall/<< pipeline.parameters.release_version >>+tiny/g" ${MY_WORKING_DIRECTORY}/config.mk
+            sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/releases/4/26/<< pipeline.parameters.release_version >>+tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
-            sed -i "s/develop/<< pipeline.parameters.release_version >>_tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
+            sed -i "s/develop/<< pipeline.parameters.release_version >>+tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
             sed -i "s/downloads.arednmesh.org/downloads.k3pgm.radio/g" ${MY_WORKING_DIRECTORY}/files/etc/uci-defaults/99_canonical_config
             cat ${MY_WORKING_DIRECTORY}/config.mk
 
@@ -125,6 +125,14 @@ commands:
       - run:
           name: Build ath79/tiny
           command: make MAINTARGET=ath79 SUBTARGET=tiny
+          no_output_timeout: 2h
+
+  build_ath79_tiny_toolchain:
+    description: "Build ath79/tiny toolchain"
+    steps:
+      - run:
+          name: Build ath79/tiny toolchain
+          command: make MAINTARGET=ath79 SUBTARGET=tiny -j5 -C openwrt toolchain/install
           no_output_timeout: 2h
 
   build_ipq40xx:
@@ -208,7 +216,9 @@ commands:
     steps:
       - run:
           name: Compress build files
-          command: tar -cjf ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} -C ${MY_WORKING_DIRECTORY}/${ARTIFACTS_DIR} .
+          command: |
+            export MY_WORKING_DIRECTORY=`pwd`
+            tar -cjf ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} -C ${MY_WORKING_DIRECTORY}/${ARTIFACTS_DIR} .
       - run:
           name: Deploy Files
           command: scp -P ${SSH_PORT} -o StrictHostKeyChecking=no ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} ${SSH_USER}@${SSH_HOST2}:${TARGET_DIR_TINY}
@@ -218,7 +228,9 @@ commands:
     steps:
       - run:
           name: Compress build files
-          command: tar -cjf ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} -C ${MY_WORKING_DIRECTORY}/${ARTIFACTS_DIR} .
+          command: |
+            export MY_WORKING_DIRECTORY=`pwd`
+            tar -cjf ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} -C ${MY_WORKING_DIRECTORY}/${ARTIFACTS_DIR} .
       - run:
           name: Deploy Files
           command: scp -P ${SSH_PORT} -o StrictHostKeyChecking=no ~/${CIRCLE_BRANCH}_${ARTIFACTS_FILE} ${SSH_USER}@${SSH_HOST2}:${TARGET_DIR_TINY}
@@ -315,6 +327,19 @@ jobs:
           paths:
             - openwrt/bin/targets/ath79
             - openwrt/bin/packages/mips_24kc
+
+  build_job_ath79_tiny_toolchain:
+    resource_class: large
+    docker:
+      - image: arednmesh/builder
+    steps:
+      - attach_workspace:
+          at: /home/aredn/project
+      - build_ath79_tiny_toolchain
+      - persist_to_workspace:
+          root: /home/aredn/project
+          paths:
+            - .
 
   build_job_ath79_tiny:
     resource_class: large
@@ -844,9 +869,12 @@ workflows:
       - build_tiny_prepare:
           requires:
             - check2buildtiny
-      - build_job_ath79_tiny:
+      - build_job_ath79_tiny_toolchain:
           requires:
             - build_tiny_prepare
+      - build_job_ath79_tiny:
+          requires:
+            - build_job_ath79_tiny_toolchain
       - build_tiny_finalize:
           requires:
             - build_job_ath79_tiny
@@ -911,9 +939,12 @@ workflows:
       equal: [ release_tiny_build, << pipeline.parameters.action >> ]
     jobs:
       - build_release_tiny_prepare
-      - build_job_ath79_tiny:
+      - build_job_ath79_tiny_toolchain:
           requires:
             - build_release_tiny_prepare
+      - build_job_ath79_tiny:
+          requires:
+            - build_job_ath79_tiny_toolchain
       - build_release_tiny_finalize:
           requires:
             - build_job_ath79_tiny

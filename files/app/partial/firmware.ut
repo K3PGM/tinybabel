@@ -40,7 +40,7 @@
         message = "";
         releases = [ firmware, firmware ];
     }
-    if (match(firmware, /^(\d+\.){3}\d+(_tiny)?$/)) {
+    if (match(firmware, /^(\d+\.){3}\d+(\+tiny)?$/)) {
         // release
         if (firmware !== releases[0]) {
             message = "needupdate";
