@@ -46,7 +46,7 @@
             message = "needupdate";
         }
     }
-    else if (match(firmware, /^(tiny-)?(babel-)?\d{8}-/)) {
+    else if (match(firmware, /^(tiny-)?\d{8}-/)) {
         // nightly
         if (firmware !== releases[1]) {
             message = "needupdate";
@@ -55,14 +55,20 @@
     else {
         message = "custom";
     }
+    let issueLink = "https://github.com/aredn/aredn/issues";
+    let changelogDir = "snapshots";
+    if (match(firmware, /tiny/)) {
+	    issueLink = "https://github.com/K3PGM/tinybabel/issues";
+	    changelogDir = "snapshots_tiny";
+    }
 %}
 <div class="ctrl" hx-get="status/e/firmware" hx-target="#ctrl-modal">
     <div class="firmware">
         <div class="t" style="position:relative">{{firmware}}<div class="firmware-status {{message}}"></div></div>
         <div class="s cols">
             <div style="flex:1.5">firmware version</div>
-            <div><a href="https://github.com/aredn/aredn/issues" target="_blank" onclick="event.stopPropagation()">issues</a></div>
-            <div><a href="{{uci.get("aredn", "@downloads[0]", "firmware_aredn")}}/snapshots/CHANGELOG.md" target="_blank" onclick="event.stopPropagation()">release notes</a></div>
+            <div><a href="{{issueLink}}" target="_blank" onclick="event.stopPropagation()">issues</a></div>
+            <div><a href="{{uci.get("aredn", "@downloads[0]", "firmware_aredn")}}/{{changelogDir}}/CHANGELOG.md" target="_blank" onclick="event.stopPropagation()">release notes</a></div>
         </div>
     </div>
 </div>
