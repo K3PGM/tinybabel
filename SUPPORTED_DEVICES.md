@@ -24,7 +24,7 @@ AirRouter || 2 | ath79 | tiny (1) | ubnt_airrouter | 32MB | stable (2) | release
 AirRouter HP || 2 | ath79 | tiny (1) | ubnt_airrouter | 32MB | stable (2) | released
 Bullet M5 || 5 | ath79 | tiny (1) | ubnt_bullet-m-ar7241 | 32MB | untested | released
 Bullet M2 || 2 | ath79 | tiny (1) | ubnt_bullet-m-ar7241 | 32MB | stable | released
-NanoBridge 2G18 || 2 | ath79 | tiny (1) | ubnt_nanobridge-m | 32MB | untested | released
+NanoBridge 2G18 || 2 | ath79 | tiny (1) | ubnt_nanobridge-m | 32MB | stable | released
 NanoBridge 5G22 || 5 | ath79 | tiny (1) | ubnt_nanobridge-m | 32MB | stable | released
 NanoBridge 5G25 || 5 | ath79 | tiny (1) | ubnt_nanobridge-m | 32MB | stable | released
 NanoBridge M9 || 900 | ath79 | tiny (1) | ubnt_nanostation-loco-m | 32MB | stable | released
@@ -38,7 +38,7 @@ PicoStation M2 || 2 | ath79 | tiny (1) | ubnt_picostation-m | 32MB | untested | 
 
 
 ## Footnotes
- 1. Tiny builds exclude support for *tunnels* and *WiFi AP* mode due to lack of resources. The relevant packages can be installed separately but this is not recommended.
+ 1. Tiny builds exclude support for *tunnels* and *WiFi AP* mode for lack of resources. The relevant packages can be installed separately but doing so is not recommended.
  2. The AirRouter works but performs poorly and may sporadically reboot. Not recommended.
 
 +tiny builds are available from: <http://downloads.k3pgm.radio/afs/www/>
