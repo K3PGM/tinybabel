@@ -12,7 +12,7 @@
 * *not supported* - this image is not supported and not available for download.
 * *frozen* - this device has been previously sunsetted, and is now frozen. Old images are still available but there will be no future updates.
 
-The 'target' and 'subtarget' identify the directory in which to find the image at <http://downloads.k3pgm.radio/>
+The 'target' and 'subtarget' identify the directory in which to find the image at <https://downloads.k3pgm.radio/>
 
 ## Ubiquiti
 Model | SKUs | Band | Target | Subtarget | Image | RAM | Stability | Status
@@ -41,6 +41,6 @@ PicoStation M2 || 2 | ath79 | tiny (1) | ubnt_picostation-m | 32MB | untested | 
  1. Tiny builds exclude support for *tunnels* and *WiFi AP* mode for lack of resources. The relevant packages can be installed separately but doing so is not recommended.
  2. The AirRouter works but performs poorly and may sporadically reboot. Not recommended.
 
-+tiny builds are available from: <http://downloads.k3pgm.radio/afs/www/>
++tiny builds are available from: <https://downloads.k3pgm.radio/afs/www/>
 
 Latest installation instructions are found at: <https://docs.arednmesh.org/en/latest/>
