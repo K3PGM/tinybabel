@@ -55,7 +55,7 @@ commands:
             sed -i "s|downloads.arednmesh.org/snapshots|downloads.k3pgm.radio/snapshots_tiny|g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/MAKE_ARGS=-j3/MAKE_ARGS=-j5/g" ${MY_WORKING_DIRECTORY}/config.mk
             sed -i "s/develop/tiny/g" ${MY_WORKING_DIRECTORY}/feeds.conf
-            sed -i "s/downloads.arednmesh.org/downloads.k3pgm.radio/g" ${MY_WORKING_DIRECTORY}/files/etc/uci-defaults/99_canonical_config
+            sed -i -e '/^\s*iperf: {/{n;s/enable: 1/enable: 0/;}' -e "s/downloads.arednmesh.org/downloads.k3pgm.radio/g" ${MY_WORKING_DIRECTORY}/files/etc/uci-defaults/99_canonical_config
             cat ${MY_WORKING_DIRECTORY}/config.mk
 
   update_release_config_mk:

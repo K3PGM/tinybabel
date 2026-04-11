@@ -19,7 +19,7 @@ Model | SKUs | Band | Target | Subtarget | Image | RAM | Stability | Status
 :------ | :----: | :----: | :------: | :---------: | :-----: | :---: | :---------: | :------
 **+tiny Devices** | | | | | | | |
 AirGrid M2 XM || 2 | ath79 | tiny (1) | ubnt_bullet-m-ar7241 | 32MB | untested | released
-AirGrid M5 XM || 5 | ath79 | tiny (1) | ubnt_bullet-m-ar7241 | 32MB | untested | released
+AirGrid M5 XM || 5 | ath79 | tiny (1) | ubnt_bullet-m-ar7241 | 32MB | stable | released
 AirRouter || 2 | ath79 | tiny (1) | ubnt_airrouter | 32MB | stable (2) | released
 AirRouter HP || 2 | ath79 | tiny (1) | ubnt_airrouter | 32MB | stable (2) | released
 Bullet M5 || 5 | ath79 | tiny (1) | ubnt_bullet-m-ar7241 | 32MB | untested | released
