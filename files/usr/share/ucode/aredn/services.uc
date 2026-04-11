@@ -438,29 +438,31 @@ function getByTopic(root, topic, targets)
     const files = targets ? targets : fs.lsdir(root);
     if (files) {
         for (let i = 0; i < length(files); i++) {
-            const file = `${root}/${files[i]}`;
-            if (fs.lstat(file).size) {
-                try {
+            try {
+                const file = `${root}/${files[i]}`;
+                if (fs.lstat(file).size) {
                     const f = fs.open(file);
                     if (f) {
                         f.lock("s");
                         const filedata = f.read("all");
                         f.lock("u");
                         f.close();
-                        const j = json(filedata);
-                        for (let i = 0; i < length(j.v1 ?? []); i++) {
-                            const t = j.v1[i].topic;
-                            if (t === topic || (topicbase && index(t, topicbase) === 0)) {
-                                push(results, j.v1[i].data);
+                        const jl = json(filedata);
+                        for (let k in jl) {
+                            const j = jl[k];
+                            for (let i = 0; i < length(j?.v1 ?? []); i++) {
+                                const t = j.v1[i].topic;
+                                if (t === topic || (topicbase && index(t, topicbase) === 0)) {
+                                    push(results, j.v1[i].data);
+                                }
                             }
                         }
                     }
                 }
-                catch (_) {
-                }
+            }
+            catch (_) {
             }
         }
-    }
     return results;
 }
 
