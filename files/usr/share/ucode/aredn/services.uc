@@ -463,6 +463,7 @@ function getByTopic(root, topic, targets)
             catch (_) {
             }
         }
+    }
     return results;
 }
 
