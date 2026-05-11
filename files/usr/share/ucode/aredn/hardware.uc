@@ -243,6 +243,12 @@ export function getChannelFromFrequency(wifiIface, freq)
     }
 };
 
+function isAX(dev)
+{
+    const driver = fs.basename(fs.realpath(`/sys/class/ieee80211/${getPhyDevice(dev)}/device/driver/module`));
+    return driver === "mt7915e";
+}
+
 function getWiFiChannels(wifiIface)
 {
     const channels = [];
@@ -279,6 +285,11 @@ function getWiFiChannels(wifiIface)
             freq_adjust = (f) => f.freq - 2000;
             freq_min = 3380;
             freq_max = 3495;
+        }
+    }
+    if (isAX(wifiIface)) {
+        if (freqs[0].freq < 2412) {
+            freq_min = 2412;
         }
     }
     for (let i = 0; i < length(freqs); i++) {
@@ -372,6 +383,7 @@ export function getRfChannels(wifiIface)
 export function getRfBandwidths(wifiIface)
 {
     const radio = getRadioIntf(wifiIface);
+    const phy = getPhyDevice(wifiIface);
     const invalid = {};
     let bw = [];
     if (radio.bandwidths) {
@@ -379,27 +391,31 @@ export function getRfBandwidths(wifiIface)
     }
     else {
         map(radio.exclude_bandwidths || [], v => invalid[v] = true);
-        if (!invalid["5"]) {
-            push(bw, 5);
-        }
-        if (!invalid["10"]) {
-            push(bw, 10);
+        if (!isAX(phy)) {
+            if (!invalid["5"]) {
+                push(bw, 5);
+            }
+            if (!invalid["10"]) {
+                push(bw, 10);
+            }
         }
         if (!invalid["20"]) {
             push(bw, 20);
         }
     }
-    const phy = replace(wifiIface, "wlan", "phy");
     if (fs.access(`/sys/kernel/debug/ieee80211/${phy}/ath10k`) || fs.access(`/sys/kernel/debug/ieee80211/${phy}/mt76`)) {
         const f = fs.popen(`/usr/bin/iwinfo ${wifiIface} htmodelist 2> /dev/null`);
         if (f) {
             let line = f.read("line");
             if (line) {
-                if (index(line, "HT40") !== -1 && !invalid["40"]) {
+                if (index(line, "40") !== -1 && !invalid["40"]) {
                     push(bw, 40);
                 }
-                if (index(line, "VHT80") !== -1 && !invalid["80"]) {
+                if (index(line, "80") !== -1 && !invalid["80"]) {
                     push(bw, 80);
+                }
+                if (index(line, "160") !== -1 && !invalid["160"]) {
+                    push(bw, 160);
                 }
             }
             while (line) {
@@ -625,7 +641,7 @@ export function getRadioNoise(wifiIface)
         }
     }
     // Fallback for hardware which doesn't support the survey api (e.g. HaLow)
-    const p = fs.popen(`/usr/bin/iwinfo ${wifiIface} info | /bin/grep Noise`);
+    const p = fs.popen(`/usr/bin/iwinfo ${wifiIface} info 2> /dev/null | /bin/grep Noise`);
     if (p) {
         const m = match(p.read("all"), /Noise: (-\d+) dBm/);
         p.close();
@@ -706,19 +722,18 @@ export function getHTMode(wifiIface, bandwidth, mode)
         }
     }
     else if (fs.access(`/sys/kernel/debug/ieee80211/${phy}/mt76`)) {
+        const prefix = isAX(phy) && mode !== "mesh" ? "HE" : "VHT";
         switch (bandwidth) {
             case 5:
             case 10:
             case 20:
-                htmode = "VHT20";
+            default:
+                htmode = `${prefix}20`;
                 break;
             case 40:
             case 80:
             case 160:
-                htmode = `HE${bandwidth}`;
-                break;
-            default:
-                htmode = "VHT20";
+                htmode = `${prefix}${bandwidth}`;
                 break;
         }
     }
