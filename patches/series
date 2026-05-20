@@ -54,5 +54,5 @@
 #790-morsemicro-support.patch
 #791-morsemicro-remove-patches.patch
 800-upgrade-compatibility.patch
-801-mikrotik-lhg-variants.patch
+#801-mikrotik-lhg-variants.patch
 802-gpio-typo.patch
