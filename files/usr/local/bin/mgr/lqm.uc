@@ -48,7 +48,7 @@ const default_long_retries = 20; // (factory default is 4)
 const default_max_distance = 80550; // 50.1 miles
 const rts_threshold = 1; // RTS setting when hidden nodes are detected
 const ping_penalty = 5; // Cost of a failed ping to measure of a link's quality
-const lastup_margin = 60; // Seconds before link is considered down
+const lastup_margin = 120; // Seconds before link is considered down
 
 const IW = "/usr/sbin/iw";
 const UFETCH = "/bin/uclient-fetch";
@@ -60,7 +60,7 @@ const wlan = device ? device.iface : "none";
 const wlanid = device ? replace(wlan, /^wlan/, "") : null;
 const phy = device ? `phy${wlanid}` : "none";
 const radio = device ? `radio${wlanid}` : "none";
-const ac = device && match(lc(hardware.getRadioName()), /ac/) ? true : false;
+const devtype = hardware.getRadioType(wlan);
 
 let config = {};
 
@@ -215,12 +215,18 @@ function main()
     updateConfig();
 
     // We dont know any distances yet
-    if (ac) {
-        lastDistance = config.max_distance;
-        hardware.setMaxDistance(wlan, lastDistance);
-    }
-    else {
-        iwSet("distance auto");
+    switch (devtype) {
+        case "halow":
+        case "ax":
+        case "ac":
+            lastDistance = config.max_distance;
+            hardware.setMaxDistance(wlan, lastDistance);
+            break;
+        case "n":
+            iwSet("distance auto");
+            break;
+        default:
+            break;
     }
     // Or any hidden nodes
     iwSet("rts off");
@@ -253,7 +259,7 @@ function main()
         // If the channel bandwidth is less than 20, we need to adjust what we report as the values.
         // NOTE. THE nl80211 api report bitrates x10 so we need to reduce this by 10 here.
         const chanbw = int(cursor.get("wireless", radio, "chanbw") || "20");
-        const channelBwScale = (hardware.getRadioType(wlan) === "halow" ? 1 : min(20, chanbw)) / 200.0;
+        const channelBwScale = (devtype === "halow" ? 1 : min(20, chanbw)) / 200.0;
 
         const lat = cursor.get("aredn", "@location[0]", "lat") ? 1 * cursor.get("aredn", "@location[0]", "lat") : null;
         const lon = cursor.get("aredn", "@location[0]", "lon") ? 1 * cursor.get("aredn", "@location[0]", "lon") : null;
@@ -350,6 +356,7 @@ function main()
                     else {
                         track.snr = max(0, track.signal - noise);
                     }
+                    track.connected_time = station.sta_info.connected_time;
                 }
             }
         }

@@ -1,6 +1,15 @@
 --- a/feeds/morse/essentials/morse_driver/Makefile
 +++ b/feeds/morse/essentials/morse_driver/Makefile
-@@ -91,7 +91,7 @@
+@@ -9,7 +9,7 @@
+ PKG_NAME:=morse_driver
+ PKG_RELEASE=3
+ 
+-PKG_VERSION:=1.16.4
++PKG_VERSION:=1.17.8
+ 
+ PKG_LICENSE:=GPLv2
+ PKG_LICENSE_FILES:=LICENSE
+@@ -85,7 +85,7 @@
    MORSE_VERSION=0-$(PKG_VERSION) \
    KERNEL_SRC=$(LINUX_DIR) \
    CONFIG_MORSE_SDIO_ALIGNMENT=$(CONFIG_MORSE_SDIO_ALIGNMENT) \
@@ -9,6 +18,102 @@
  # This refers to the version of mac80211 backported to OpenWrt
  # Occasionally patches are required to remove some parts of the driver
  # as OpenWrt may sometimes pull in further patches from later kernel versions
+--- a/feeds/morse/essentials/morsecli/Makefile
++++ b/feeds/morse/essentials/morsecli/Makefile
+@@ -10,7 +10,7 @@
+ PKG_NAME:=morsecli
+ PKG_RELEASE=5
+ 
+-PKG_VERSION:=1.16.4
++PKG_VERSION:=1.17.8
+ 
+ PKG_LICENSE:=GPLv2
+ PKG_LICENSE_FILES:=
+
+--- a/feeds/morse/essentials/morse-fw/Makefile
++++ b/feeds/morse/essentials/morse-fw/Makefile
+@@ -13,9 +13,9 @@
+ PKG_NAME:=morse-fw
+ PKG_RELEASE=2
+ 
+-PKG_VERSION:=1.16.4
++PKG_VERSION:=1.17.8
+ 
+-PKG_SOURCE_VERSION:=68fcf18643b0fe12d1ff73ad03089b8c0b7d2979
++PKG_SOURCE_VERSION:=1457e131f1b1cd7728d73ae3a09729b1782a776a
+ PKG_SOURCE_URL:=https://github.com/MorseMicro/morse-firmware.git
+ PKG_HASH:=dbc6b5428fc6d4defa89a29c00c99a73ca07f704501d3618eddacb826007f486
+ PKG_SOURCE_PROTO:=git
+@@ -84,6 +84,14 @@
+   PROVIDES:=morse-fw
+ endef
+ 
++define Package/morse-fw-aredn
++  CATEGORY:=Morse Micro
++  SUBMENU:=Essentials
++  URL:=$(PKG_SOURCE_URL)
++  TITLE:=Morse Micro WIFI HaLow standard firmware for 6108 and 8108
++  PROVIDES:=morse-fw
++endef
++
+ define Package/morse-fw-8108-flm/description
+   This firmware implements the functionality of the mac80211
+   module (and some wpa_supplicant functionality) on the 8108.
+@@ -132,8 +140,16 @@
+ 	$(call install_file_or_override,mm8108b2-flm-rl.bin,$(1))
+ endef
+ 
++define Package/morse-fw-aredn/install
++	$(INSTALL_DIR) $(1)/lib/firmware/morse/.
++	$(call install_file_or_override,mm6108.bin,$(1))
++	$(call install_file_or_override,mm8108b2-rl.bin,$(1))
++endef
++
++
+ $(eval $(call BuildPackage,morse-fw-6108))
+ $(eval $(call BuildPackage,morse-fw-6108-tlm))
+ $(eval $(call BuildPackage,morse-fw-8108))
+ $(eval $(call BuildPackage,morse-fw-8108-tlm))
+ $(eval $(call BuildPackage,morse-fw-8108-flm))
++$(eval $(call BuildPackage,morse-fw-aredn))
+
+--- a/feeds/morse/essentials/mm-board-config/Makefile
++++ b/feeds/morse/essentials/mm-board-config/Makefile
+@@ -13,9 +13,9 @@
+ PKG_NAME:=morse-board-config
+ PKG_RELEASE=6
+ 
+-PKG_VERSION:=1.16.4
++PKG_VERSION:=1.17.8
+ 
+-PKG_SOURCE_VERSION:=68fcf18643b0fe12d1ff73ad03089b8c0b7d2979
++PKG_SOURCE_VERSION:=fd41e1cffa7ab3cda88503f37e1cb05a3098be31
+ PKG_SOURCE_URL:=https://github.com/MorseMicro/morse-firmware.git
+ PKG_HASH:=4a9ccc2fa085597cd2a83f0833508aa230d2c37eee8a54b195be0da48aa6325a
+ PKG_SOURCE_PROTO:=git
+
+--- a/feeds/morse/essentials/hostapd_s1g/Makefile
++++ b/feeds/morse/essentials/hostapd_s1g/Makefile
+@@ -10,7 +10,7 @@
+ PKG_NAME:=hostapd_s1g
+ PKG_RELEASE=2
+ 
+-PKG_VERSION:=1.16.4
++PKG_VERSION:=1.17.8
+ 
+ PKG_LICENSE:=BSD-3-Clause
+ 
+--- a/feeds/morse/essentials/wpa_supplicant_s1g/Makefile
++++ b/feeds/morse/essentials/wpa_supplicant_s1g/Makefile
+@@ -10,7 +10,7 @@
+ PKG_NAME:=wpa_supplicant_s1g
+ PKG_RELEASE=2
+ 
+-PKG_VERSION:=1.16.4
++PKG_VERSION:=1.17.8
+ 
+ PKG_LICENSE:=BSD-3-Clause
+ 
 --- a/package/feeds/morse/morse-regdb/Makefile
 +++ b/package/feeds/morse/morse-regdb/Makefile
 @@ -18,7 +18,7 @@
@@ -33,32 +138,7 @@
  
 --- /dev/null
 +++ b/feeds/morse/essentials/morse_driver/patches/100-aredn.patch
-@@ -0,0 +1,138 @@
-+--- a/debug.h
-++++ b/debug.h
-+@@ -154,7 +154,7 @@
-+  *
-+  * @returns	True if output would be generated and false otherwise.
-+  */
-+-bool morse_log_is_enabled(u32 id, u8 level);
-++bool morse_log_is_enabled(enum morse_feature_id id, u8 level);
-+ 
-+ /**
-+  * Set the default logging level for all features.
-+
-+--- a/firmware.h
-++++ b/firmware.h
-+@@ -139,7 +139,9 @@
-+ 	u8 ext_host_table_data_tlvs[];
-+ } __packed;
-+ 
-+-int morse_firmware_init(struct morse *mors, uint test_mode);
-++enum morse_config_test_mode;
-++
-++int morse_firmware_init(struct morse *mors, enum morse_config_test_mode test_mode);
-+ 
-+ /**
-+  * @brief Perform non-destructive-reset of the chip,
+@@ -0,0 +1,10 @@
 +--- a/mac.c
 ++++ b/mac.c
 +@@ -6607,6 +6607,7 @@
@@ -69,112 +149,9 @@
 + 	    country_codes_are_equal(request->alpha2, "00"))
 + 		req_cc = country;
 + 	else
-+--- a/mac.c
-++++ b/mac.c
-+@@ -48,6 +48,8 @@
-+ #include "led.h"
-+ #include "monitor.h"
-+ 
-++#define	IEEE80211_CHAN_IGNORE	IEEE80211_CHAN_S1G_NO_PRIMARY
-++
-+ #define RATE(rate100m, _flags) { \
-+ 	.bitrate = (rate100m), \
-+ 	.flags = (_flags), \
-+--- a/dot11ah/s1g_channels.c
-++++ b/dot11ah/s1g_channels.c
-+@@ -19,6 +19,8 @@
-+ #include "s1g_channels_rules.c"
-+ #include "channel_alphas.h"
-+ 
-++#define	IEEE80211_CHAN_IGNORE	IEEE80211_CHAN_S1G_NO_PRIMARY
-++
-+ #define CHANNEL_FLAGS_BW_MASK 0x7c000
-+ 
-+ /**
-+--- a/mac.c
-++++ b/mac.c
-+@@ -3469,7 +3469,7 @@
-+ 	return ret;
-+ }
-+ 
-+-static int morse_mac_ops_config(struct ieee80211_hw *hw, u32 changed)
-++static int morse_mac_ops_config(struct ieee80211_hw *hw, int __dummy__, u32 changed)
-+ {
-+ 	int err = 0;
-+ 	struct morse *mors = hw->priv;
-+@@ -3539,7 +3539,7 @@
-+ }
-+ 
-+ /* Return Tx power only when channel is configured and is the same as one in hw->conf */
-+-static int morse_mac_ops_get_txpower(struct ieee80211_hw *hw, struct ieee80211_vif *vif, int *dbm)
-++static int morse_mac_ops_get_txpower(struct ieee80211_hw *hw, struct ieee80211_vif *vif, unsigned int __dummy__, int *dbm)
-+ {
-+ 	int err;
-+ 	struct morse *mors = hw->priv;
-+@@ -4890,7 +4890,7 @@
-+ 		 * packets.
-+ 		 */
-+ 		changed |= IEEE80211_CONF_CHANGE_CHANNEL;
-+-		morse_mac_ops_config(hw, changed);
-++		morse_mac_ops_config(hw, 0, changed);
-+ 	}
-+ 
-+ 	memcpy(bssid, vif->bss_conf.bssid, ETH_ALEN);
-+@@ -4926,7 +4926,7 @@
-+ 	mutex_unlock(&mors->lock);
-+ }
-+
-+-static int morse_mac_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
-++static int morse_mac_set_frag_threshold(struct ieee80211_hw *hw, int __dummy__, u32 value)
-+ {
-+ 	int ret = -EINVAL;
-+ 	struct morse *mors = hw->priv;
-+@@ -4940,7 +4940,7 @@
-+ 	return ret;
-+ }
-+ 
-+-static int morse_mac_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
-++static int morse_mac_set_rts_threshold(struct ieee80211_hw *hw, int __dummy__, u32 value)
-+ {
-+ 	/* When Minstrel is not used, Linux checks if .set_rts_threshold is registered.
-+ 	 * MMRC follows Minstrel to apply RTS on retry rates so does not use this function.
-+--- a/dot11ah/ie.c
-++++ b/dot11ah/ie.c
-+@@ -526,7 +526,7 @@
-+ 	if (!ies_mask)
-+ 		return 0;
-+ 
-+-	if (ieee80211_is_s1g_short_beacon(frame_control) ||
-++	if (ieee80211_is_s1g_beacon(frame_control) ||
-+ 	    (le16_to_cpu(frame_control) & IEEE80211_FC_COMPRESS_SSID)) {
-+ 		ies_order_table = morse_ext_s1g_short_beacon_ies_order;
-+ 		ies_order_table_len = ARRAY_SIZE(morse_ext_s1g_short_beacon_ies_order);
-+--- a/vendor_ie.c
-++++ b/vendor_ie.c
-+@@ -149,8 +149,7 @@
-+  */
-+ static inline u8 *get_elements_from_s1g_beacon(struct ieee80211_ext *bcn)
-+ {
-+-	return (ieee80211_is_s1g_short_beacon(bcn->frame_control) ?
-+-		bcn->u.s1g_short_beacon.variable : bcn->u.s1g_beacon.variable);
-++	return (u8 *)bcn->u.s1g_beacon.variable;
-+ }
-+ 
-+ /**
-+--- a/wiphy.c
-++++ b/wiphy.c
-+@@ -1012,7 +1012,7 @@
-+ 	return ret;
-+ }
-+ 
-+-static int morse_wiphy_set_wiphy_params(struct wiphy *wiphy, u32 changed)
-++static int morse_wiphy_set_wiphy_params(struct wiphy *wiphy, int __dummy__, u32 changed)
-+ {
-+ 	struct morse *mors = wiphy_priv(wiphy);
-+ 	int ret = 0;
 --- a/target/linux/ramips/image/mt7621.mk
 +++ b/target/linux/ramips/image/mt7621.mk
-@@ -2058,6 +2058,20 @@
+@@ -2058,6 +2058,34 @@
  endef
  TARGET_DEVICES += mikrotik_routerboard-m33g
  
@@ -191,6 +168,20 @@
 +	kmod-morse netifd-morse
 +endef
 +TARGET_DEVICES += morse_artini
++
++define Device/morse_halowlink2
++  $(Device/dsa-migration)
++  IMAGE_SIZE := 32448k
++  UBOOT_OFFSET := 512k
++  UBOOT_TARGET := mt7621_morsemicro_halowlink2
++  UBOOT_IMAGE := u-boot.bin
++  UBOOT_PATH := $(STAGING_DIR_IMAGE)/$$(UBOOT_TARGET)-$$(UBOOT_IMAGE)
++  DEVICE_VENDOR := MorseMicro
++  DEVICE_MODEL := HaLowLink 2
++  DEVICE_PACKAGES := kmod-mmc-mtk kmod-mt7603 \
++	kmod-morse netifd-morse
++endef
++TARGET_DEVICES += morse_halowlink2
 +
  define Device/mqmaker_witi
    $(Device/dsa-migration)
@@ -570,11 +561,12 @@
 +};
 --- a/target/linux/ramips/mt7621/base-files/etc/board.d/02_network
 +++ b/target/linux/ramips/mt7621/base-files/etc/board.d/02_network
-@@ -180,6 +180,10 @@
+@@ -180,6 +180,11 @@
  	ruijie,rg-ew1200g-pro-v1.1)
  		ucidef_set_interfaces_lan_wan "lan3 lan2 lan1" "wan"
  		;;
-+	morse,artini)
++	morse,artini|\
++	morse,halowlink2)
 +		ucidef_set_interfaces_lan_wan "lan usblan" "wan"
 +		ucidef_set_interface "dtdlink" device "lan.2 usblan.2" protocol "static"
 +		;;
@@ -582,153 +574,9 @@
  		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
  		;;
 
-#--- a/package/kernel/linux/modules/leds.mk
-#+++ b/package/kernel/linux/modules/leds.mk
-#@@ -233,6 +233,24 @@
-# $(eval $(call KernelPackage,leds-pwm))
-# 
-# 
-#+define KernelPackage/leds-pwm-multicolor
-#+  SUBMENU:=$(LEDS_MENU)
-#+  TITLE:=PWM driven Multicolor LED Support
-#+  KCONFIG:= \
-#+        CONFIG_PWM=y \
-#+        CONFIG_LEDS_CLASS_MULTICOLOR=y \
-#+        CONFIG_LEDS_PWM_MULTICOLOR
-#+  FILES:=$(LINUX_DIR)/drivers/leds/rgb/leds-pwm-multicolor.ko
-#+  AUTOLOAD:=$(call AutoLoad,60,leds-pwm-multicolor)
-#+endef
-#+
-#+define KernelPackage/leds-pwm-multicolor/description
-#+ This option enables multicolor support for pwm driven LEDs
-#+endef
-#+
-#+$(eval $(call KernelPackage,leds-pwm-multicolor))
-#+
-#+
-# define KernelPackage/leds-tlc591xx
-#   SUBMENU:=$(LEDS_MENU)
-#   TITLE:=LED driver for TLC59108 and TLC59116 controllers
-#
-#--- /dev/null
-#+++ b/target/linux/ramips/patches-6.12/999-morse-Add-default-brightness-and-intensity-to-leds-pwm-mul.patch
-#@@ -0,0 +1,113 @@
-#+From bf6699d3041266ec4e4b146ca387f2f104ed7a30 Mon Sep 17 00:00:00 2001
-#+From: Evan Benn <evan.benn@morsemicro.com>
-#+Date: Tue, 20 Aug 2024 16:50:04 +1000
-#+Subject: [PATCH] Add default brightness and intensity to leds-pwm-multicolor
-#+
-#+---
-#+ drivers/leds/led-class-multicolor.c | 33 +++++++++++++++++++++++++++++
-#+ drivers/leds/led-class.c            | 11 +++++++++-
-#+ include/linux/leds.h                |  1 +
-#+ 3 files changed, 44 insertions(+), 1 deletion(-)
-#+
-#+Index: linux-6.12.74/drivers/leds/led-class-multicolor.c
-#+===================================================================
-#+--- linux-6.12.74.orig/drivers/leds/led-class-multicolor.c
-#++++ linux-6.12.74/drivers/leds/led-class-multicolor.c
-#+@@ -3,6 +3,7 @@
-#+ // Copyright (C) 2019-20 Texas Instruments Incorporated - http://www.ti.com/
-#+ // Author: Dan Murphy <dmurphy@ti.com>
-#+ 
-#++#include "linux/property.h"
-#+ #include <linux/device.h>
-#+ #include <linux/init.h>
-#+ #include <linux/led-class-multicolor.h>
-#+@@ -118,6 +119,36 @@ static struct attribute *led_multicolor_
-#+ };
-#+ ATTRIBUTE_GROUPS(led_multicolor);
-#+ 
-#++void read_default_intensity(struct led_classdev_mc *mcled_cdev, struct led_init_data *init_data)
-#++{
-#++	u32 count = fwnode_property_count_u32(init_data->fwnode,
-#++					  "default-mc-intensity");
-#++	u32 *default_intensity;
-#++	u32 i;
-#++
-#++	if (count != mcled_cdev->num_colors) {
-#++		return;
-#++	}
-#++
-#++	default_intensity =
-#++		kcalloc(count, sizeof(*default_intensity),
-#++			GFP_KERNEL);
-#++	if (!default_intensity)
-#++		return;
-#++
-#++	if (fwnode_property_read_u32_array(
-#++			init_data->fwnode, "default-mc-intensity",
-#++			default_intensity, count)) {
-#++		kfree(default_intensity);
-#++		return;
-#++	}
-#++
-#++	for (i = 0; i < mcled_cdev->num_colors; i++)
-#++		mcled_cdev->subled_info[i]
-#++			.intensity = default_intensity[i];
-#++	kfree(default_intensity);
-#++}
-#++
-#+ int led_classdev_multicolor_register_ext(struct device *parent,
-#+ 				     struct led_classdev_mc *mcled_cdev,
-#+ 				     struct led_init_data *init_data)
-#+@@ -136,6 +167,8 @@ int led_classdev_multicolor_register_ext
-#+ 	led_cdev = &mcled_cdev->led_cdev;
-#+ 	mcled_cdev->led_cdev.groups = led_multicolor_groups;
-#+ 
-#++	read_default_intensity(mcled_cdev, init_data);
-#++
-#+ 	return led_classdev_register_ext(parent, led_cdev, init_data);
-#+ }
-#+ EXPORT_SYMBOL_GPL(led_classdev_multicolor_register_ext);
-#+Index: linux-6.12.74/drivers/leds/led-class.c
-#+===================================================================
-#+--- linux-6.12.74.orig/drivers/leds/led-class.c
-#++++ linux-6.12.74/drivers/leds/led-class.c
-#+@@ -495,6 +495,16 @@
-#+ 						    "retain-state-shutdown"))
-#+ 				led_cdev->flags |= LED_RETAIN_AT_SHUTDOWN;
-#+ 
-#++			if (fwnode_property_present(init_data->fwnode,
-#++						    "default-brightness"))
-#++			{
-#++				fwnode_property_read_u32(
-#++				    init_data->fwnode,
-#++				    "default-brightness",
-#++				    &led_cdev->brightness);
-#++				led_cdev->default_brightness = true;
-#++			}
-#++
-#+ 			fwnode_property_read_u32(init_data->fwnode,
-#+ 				"max-brightness",
-#+ 				&led_cdev->max_brightness);
-#+@@ -412,8 +422,8 @@ int led_classdev_register_ext(struct dev
-#+ 
-#+ 	if (!led_cdev->max_brightness)
-#+ 		led_cdev->max_brightness = LED_FULL;
-#+-
-#+-	led_update_brightness(led_cdev);
-#++	if (!led_cdev->default_brightness)
-#++		led_update_brightness(led_cdev);
-#+ 
-#+ 	led_init_core(led_cdev);
-#+ 
-#+Index: linux-6.12.74/include/linux/leds.h
-#+===================================================================
-#+--- linux-6.12.74.orig/include/linux/leds.h
-#++++ linux-6.12.74/include/linux/leds.h
-#+@@ -100,6 +100,7 @@
-#+ 	const char		*name;
-#+ 	unsigned int brightness;
-#+ 	unsigned int max_brightness;
-#++	bool default_brightness;
-#+ 	unsigned int color;
-#+ 	int			 flags;
-#+ 
 --- a/target/linux/ramips/image/mt76x8.mk
 +++ b/target/linux/ramips/image/mt76x8.mk
-@@ -1449,6 +1449,41 @@
+@@ -1449,6 +1449,47 @@
  endef
  TARGET_DEVICES += zyxel_keenetic-extra-ii
  
@@ -753,6 +601,12 @@
 +  SUPPORTED_DEVICES := morse,ekh03v3 morse,ekh03-03
 +endef
 +TARGET_DEVICES += morse_ekh03v3
++
++define Device/heltec_ht-hd01-v2
++  $(Device/morse_ekh03)
++  SUPPORTED_DEVICES := heltec,ht-hd01-v2 Heltec,HT-HD01-V2
++endef
++TARGET_DEVICES += heltec_ht-hd01-v2
 +
 +define Device/alfa-network_tube-ahm-r0c
 +  IMAGE_SIZE := 32448k
@@ -1073,10 +927,12 @@
 +};
 --- a/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network
 +++ b/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network
-@@ -214,6 +214,13 @@
+@@ -214,6 +214,15 @@
  		ucidef_add_switch "switch0" \
  			"0:lan:2" "1:lan:1" "4:wan" "6@eth0"
  		;;
++	heltec,ht-hd01-v2|\
++	alfa-network,tube-ahm-r0c|\
 +	morse,ekh03v3)
 +		ucidef_add_switch "switch0"
 +		ucidef_add_switch_attr "switch0" "enable" "false"
@@ -1136,43 +992,391 @@
 +&sdhci {
 +	no-1-8-v;
 +};
---- a/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network
-+++ b/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network
-@@ -214,6 +214,7 @@
- 		ucidef_add_switch "switch0" \
- 			"0:lan:2" "1:lan:1" "4:wan" "6@eth0"
- 		;;
-+	alfa-network,tube-ahm-r0c|\
- 	morse,ekh03v3)
- 		ucidef_add_switch "switch0"
- 		ucidef_add_switch_attr "switch0" "enable" "false"
 
-#--- /dev/null
-#+++ b/target/linux/ramips/patches-6.12/999-morse-cfg80211-flags.patch
-#@@ -0,0 +1,10 @@
-#+--- a/include/net/cfg80211.h
-#++++ b/include/net/cfg80211.h
-#+@@ -138,6 +138,7 @@
-#+ 	IEEE80211_CHAN_16MHZ		= 1<<18,
-#+ 	IEEE80211_CHAN_NO_320MHZ	= 1<<19,
-#+ 	IEEE80211_CHAN_NO_EHT		= 1<<20,
-#++	IEEE80211_CHAN_IGNORE		= 1<<27,
-#+ };
-#+ 
-#+ #define IEEE80211_CHAN_NO_HT40 \
-#--- /dev/null
-#+++ b/package/kernel/mac80211/patches/build/999-morse-cfg80211-flags.patch
-#@@ -0,0 +1,10 @@
-#+--- a/include/net/cfg80211.h
-#++++ b/include/net/cfg80211.h
-#+@@ -158,6 +158,7 @@
-#+ 	IEEE80211_CHAN_CAN_MONITOR		= BIT(24),
-#+ 	IEEE80211_CHAN_ALLOW_6GHZ_VLP_AP	= BIT(25),
-#+ 	IEEE80211_CHAN_ALLOW_20MHZ_ACTIVITY     = BIT(26),
-#++	IEEE80211_CHAN_IGNORE			= BIT(27),
-#+ };
-#+ 
-#+ #define IEEE80211_CHAN_NO_HT40 \
+--- /dev/null
++++ b/target/linux/ramips/dts/mt7621_morse_halowlink2.dts
+@@ -0,0 +1,368 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
++
++#include "mt7621.dtsi"
++
++#include <dt-bindings/leds/common.h>
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++
++/ {
++	compatible = "morse,halowlink2", "mediatek,mt7621-soc";
++	model = "MorseMicro HaLowLink 2";
++
++	aliases {
++		led-halow = &led2;
++		led-wifi = &led0;
++		led-status = &led1;
++		label-mac-device = &wan;
++	};
++
++	chosen {
++		bootargs = "console=ttyS0,115200";
++	};
++
++	keys {
++		compatible = "gpio-keys";
++
++		reset {
++			label = "reset";
++			gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
++			linux,code = <BTN_0>;
++		};
++	};
++
++	led0 {
++		compatible = "pwm-leds-multicolor";
++
++		led0: multi-led {
++			label = "rgb:led0";
++			color = <LED_COLOR_ID_RGB>;
++			function = LED_FUNCTION_INDICATOR;
++			max-brightness = <255>;
++
++			led0_red {
++				pwms = <&pwm0_red 0 1000000>;
++				color = <LED_COLOR_ID_RED>;
++			};
++
++			led0_green {
++				pwms = <&pwm0_green 0 1000000>;
++				color = <LED_COLOR_ID_GREEN>;
++			};
++
++			led0_blue {
++				pwms = <&pwm0_blue 0 1000000>;
++				color = <LED_COLOR_ID_BLUE>;
++			};
++		};
++	};
++
++	led1 {
++		compatible = "pwm-leds-multicolor";
++
++		led1: multi-led {
++			label = "rgb:led1";
++			color = <LED_COLOR_ID_RGB>;
++			function = LED_FUNCTION_INDICATOR;
++			max-brightness = <255>;
++			linux,default-trigger = "timer";
++			led-pattern = <100 100>;
++			default-brightness = <255>;
++			default-mc-intensity = <0 255 0>;
++
++			led1_red {
++				pwms = <&pwm1_red 0 1000000>;
++				color = <LED_COLOR_ID_RED>;
++			};
++
++			led1_green {
++				pwms = <&pwm1_green 0 1000000>;
++				color = <LED_COLOR_ID_GREEN>;
++			};
++
++			led1_blue {
++				pwms = <&pwm1_blue 0 1000000>;
++				color = <LED_COLOR_ID_BLUE>;
++			};
++		};
++	};
++
++	led2 {
++		compatible = "pwm-leds-multicolor";
++
++		led2: multi-led {
++			label = "rgb:led2";
++			color = <LED_COLOR_ID_RGB>;
++			function = LED_FUNCTION_INDICATOR;
++			max-brightness = <255>;
++
++			led2_red {
++				pwms = <&pwm2_red 0 1000000>;
++				color = <LED_COLOR_ID_RED>;
++			};
++
++			led2_green {
++				pwms = <&pwm2_green 0 1000000>;
++				color = <LED_COLOR_ID_GREEN>;
++			};
++
++				led2_blue {
++				pwms = <&pwm2_blue 0 1000000>;
++				color = <LED_COLOR_ID_BLUE>;
++			};
++		};
++	};
++
++	pwm0_red: pwm0_red {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm0_green: pwm0_green {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm0_blue: pwm0_blue {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 15 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm1_red: pwm1_red {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 23 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm1_green: pwm1_green {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 22 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm1_blue: pwm1_blue {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 33 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm2_red: pwm2_red {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 28 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm2_green: pwm2_green {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 29 GPIO_ACTIVE_LOW>;
++	};
++
++	pwm2_blue: pwm2_blue {
++		#pwm-cells = <2>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio 32 GPIO_ACTIVE_LOW>;
++	};
++
++	mmc_fixed_3v3: fixedregulator@0 {
++		compatible = "regulator-fixed";
++		regulator-name = "mmc_power";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		enable-active-high;
++		regulator-always-on;
++	};
++};
++
++&i2c {
++	status = "okay";
++};
++
++&pinctrl {
++	jtag_pins: jtag_pins {
++		jtag_pins {
++			groups = "jtag";
++			function = "gpio";
++		};
++	};
++};
++
++&sdhci {
++	status = "okay";
++	bus-width = <4>;
++	max-frequency = <48000000>;
++
++	cap-sd-highspeed;
++	cap-mmc-highspeed;
++	cap-sdio-irq;
++	non-removable;
++	disable-wp;
++
++	vmmc-supply = <&mmc_fixed_3v3>;
++	vqmmc-supply = <&mmc_fixed_3v3>;
++
++	/* Use the real SoC clock, not a fixed-clock shim */
++	clocks = <&sysc MT7621_CLK_SHXC>, <&sysc MT7621_CLK_SHXC>;
++	clock-names = "source", "hclk";
++
++	/* Required by upstream driver */
++	resets = <&sysc MT7621_RST_SDXC>;
++	reset-names = "hrst";
++
++	pinctrl-names = "default", "state_uhs";
++	pinctrl-0 = <&sdhci_pins>;
++	pinctrl-1 = <&sdhci_pins>;
++
++	mm8108_sdio: mm8108_sdio@0 {
++		compatible = "morse,mm610x";
++		reset-gpios = <&gpio 6 0>;
++		power-gpios = <&gpio 7 0>,
++		              <&gpio 8 0>;
++		status = "okay";
++		reg = <2>;
++		bus-width = <4>;
++	};
++};
++
++&spi0 {
++	status = "okay";
++
++	flash@0 {
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		spi-max-frequency = <50000000>;
++		broken-flash-reset;
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "u-boot";
++				reg = <0x0 0x70000>;
++				read-only;
++			};
++
++			// This is a 'ubootenv' format partition that we use to persist settings
++			// between flashes/factory reset (i.e. similar to the factory partition,
++			// but writeable by userspace).
++			partition@70000 {
++				label = "openwrt-env";
++				reg = <0x70000 0x10000>;
++			};
++
++			partition@80000 {
++				label = "u-boot-env";
++				reg = <0x80000 0x10000>;
++				read-only;
++			};
++
++			factory: partition@90000 {
++				label = "factory";
++				reg = <0x90000 0x10000>;
++				read-only;
++			};
++
++			partition@A0000 {
++				compatible = "denx,uimage";
++				label = "firmware";
++				reg = <0xA0000 0x1f60000>;
++			};
++		};
++	};
++};
++
++&pcie {
++	status = "okay";
++};
++
++&pcie0 {
++	wifi@0,0 {
++		compatible = "mediatek,mt76";
++		reg = <0x0000 0 0 0 0>;
++		mediatek,mtd-eeprom = <&factory 0x0>;
++	};
++};
++
++&ethernet {
++	/* MDIO is required to be on to talk to GSW controller */
++	pinctrl-names = "default";
++	pinctrl-0 = <&mdio_pins>;
++};
++
++&gmac0 {
++	nvmem-cells = <&macaddr_factory_4000>;
++	nvmem-cell-names = "mac-address";
++	mac-address-increment = <1>;
++};
++
++&switch0 {
++	ports {
++		port@0 {
++			status = "okay";
++			label = "usblan";
++		};
++
++		port@2 {
++			status = "okay";
++			label = "lan";
++		};
++
++		wan: port@4 {
++			status = "okay";
++			label = "wan";
++			nvmem-cells = <&macaddr_factory_4000>;
++			nvmem-cell-names = "mac-address";
++		};
++	};
++};
++
++&gpio {
++	/* These are the default names from the docs, EXCEPT that those that are connected to the HaLow chip and renamed
++	 * (see MM_*).
++	 */
++	gpio-line-names =
++		/* GPIO0 -> GPIO12 */
++		"", "RXD1", "TXD1", "I2C_SD", "I2C_SCLK", "", "MM_RESET", "MM_WAKE", "MM_BUSY", "RTS2_N", "CTS2_N", "TXD2", "MM_DBG_TX",
++		/* GPIO13 -> GPIO21 */
++		"JTDO", "JTDI", "JTMS", "JTCLK", "JTRST_N", "WDT_RST_N", "PERST", "", "",
++		/* GPIO22 -> GPIO33 */
++		"GE2_TXD0", "GE2_TXD1", "GE2_TXD2", "GE2_TXD3", "GE2_TXEN", "MM_BOOST", "GE2_RXD0", "GE2_RXD1", "GE2_RXD2", "GE2_RXD3", "GE2_RXDV", "GE2_RXCLK",
++		/* GPIO34 -> GPIO48 */
++		"ND_CS_N", "ND_WE_N", "ND_RE_N", "ND_D4", "ND_D5", "ND_D6", "ND_D7", "ND_WP", "ND_RB_N", "ND_CLE", "ND_ALE", "ND_D0", "ND_D1", "ND_D2", "ND_D3",
++		/* GPIO49 -> GPIO63 - unused, but need to be specified to avoid kernel complaints */
++		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
++		/* GPIO64 -> GPIO95 - unused, but need to be specified to avoid kernel complaints */
++		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
++		;
++};
++
++&state_default {
++	gpio {
++		groups = "wdt", "jtag", "uart3", "rgmii2";
++		function = "gpio";
++	};
++};
++
++/* HaLow DBG_TX is connected to this uart (other lines are unused). */
++&uartlite2 {
++	status = "okay";
++};
++
++&factory {
++	compatible = "nvmem-cells";
++	#address-cells = <1>;
++	#size-cells = <1>;
++
++	macaddr_factory_4000: macaddr@4000 {
++		reg = <0x4000 0x6>;
++	};
++};
++
++&xhci {
++	status = "disabled";
++};
+
+--- /dev/null
++++ b/target/linux/ramips/dts/mt7628an_heltec_ht-hd01-v2.dts
+@@ -0,0 +1,8 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include "mt7628an_morse_ekh03v3.dts"
++
++/ {
++        compatible = "heltec,ht-hd01-v2", "mediatek,mt7628an-soc";
++        model = "Heltec HT-HD01-V2";
++};
+
 --- /dev/null
 +++ b/package/kernel/mac80211/patches/build/999-morse-cfg80211-flags.patch
 @@ -0,0 +1,15 @@
