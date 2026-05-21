@@ -111,7 +111,12 @@ function resetNetwork(op)
             }
             break;
         case "morse":
-            system(`${IFDOWN} wifi; ${IFUP} wifi`);
+            if (op === "restart") {
+                system(`${IFDOWN} wifi; ${IFUP} wifi`);
+            }
+            break;
+        case "mt76":
+            log.syslog(log.LOG_NOTICE, `-- ignored`);
             break;
         default:
             log.syslog(log.LOG_ERR, `-- unknown chipset '${chipset}`);
@@ -299,6 +304,9 @@ return waitForTicks(max(1, 180 - clock(true)[0]), function()
     }
     else if (fs.access(`/sys/kernel/debug/ieee80211/${phy}/morse`)) {
         chipset = "morse";
+    }
+    else if (fs.access(`/sys/kernel/debug/ieee80211/${phy}/mt76`)) {
+        chipset = "mt76";
     }
     else {
         log.syslog(log.LOG_NOTICE, `Unknown chipset`);

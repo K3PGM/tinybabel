@@ -55,7 +55,8 @@
         "description": "2.1 dBi Omni",
         "gain": 2.1,
         "beamwidth": 360
-      }
+      },
+      "exclude_channels": [ -4, -3, -2, -1 ]
     },
     "wlan1": {
       "maxpower": 20,
@@ -1027,7 +1028,7 @@
       }
     },
     "wlan1": {
-      "disabled": 1
+      "disabled": true
     }
   },
   "0xe4f5": {
@@ -1297,7 +1298,7 @@
       "maxpower": 27,
       "antenna": "external"
     },
-    "features": [ "supernode", "videoproxy", "xlink" ]
+    "features": [ "supernode", "videoproxy", "xlink", "only_one_radio" ]
   },
   "morsemicro halowlink 1": {
     "name": "MorseMicro HaLowLink 1",
@@ -1320,6 +1321,27 @@
       }
     }
   },
+  "morsemicro halowlink 2": {
+    "name": "MorseMicro HaLowLink 2",
+    "wlan0": {
+      "band": "halow",
+      "bandwidths": [ 1, 2, 4, 8 ],
+      "exclude_modes": [ "wan" ],
+      "maxpower": 26,
+      "antenna": "external",
+      "bcf": "bcf_mm_hl2_ext.bin"
+    },
+    "wlan1": {
+      "exclude_bandwidths": [ 5, 10 ],
+      "exclude_modes": [ "meshap", "meshptp", "meshsta" ],
+      "maxpower": 20,
+      "antenna": {
+        "description": "3.5 dBi Omni",
+        "gain": 3.5,
+        "beamwidth": 360
+      }
+    }
+  },
   "morsemicro ekh03-03": {
     "name": "MorseMicro EKH03-03",
     "wlan0": {
@@ -1329,6 +1351,31 @@
       "maxpower": 21,
       "antenna": "external",
       "bcf": "bcf_mf08651_us.bin"
+    },
+    "wlan1": {
+      "exclude_bandwidths": [ 5, 10 ],
+      "exclude_modes": [ "mesh", "meshap", "meshptp", "meshsta" ],
+      "maxpower": 20,
+      "antenna": {
+        "description": "Omni",
+        "gain": 0,
+        "beamwidth": 360
+      }
+    },
+    "timeouts": {
+      "reboot": [ 60, 300 ],
+      "upgrade": [ 240, 720 ]
+    }
+  },
+  "heltec ht-hd01-v2": {
+    "name": "Heltec HT-HD01-V2",
+    "wlan0": {
+      "band": "halow",
+      "bandwidths": [ 1, 2, 4, 8 ],
+      "exclude_modes": [ "wan" ],
+      "maxpower": 27,
+      "antenna": "external",
+      "bcf": "bcf_fgh100mhaamd.bin"
     },
     "wlan1": {
       "exclude_bandwidths": [ 5, 10 ],
@@ -1373,7 +1420,113 @@
     "wlan1": {
       "exclude_modes": [ "mesh" ]
     },
-    "features": [ "supernode", "videoproxy", "xlink" ]
+    "features": [ "supernode", "videoproxy", "xlink", "only_one_radio" ]
+  },
+  "cudy wr3000 v1": {
+    "name": "Cudy WR3000 v1.0",
+    "wlan0": {
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "wlan1": {
+      "exclude_modes": [ "mesh" ],
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "features": [ "supernode", "videoproxy", "xlink", "only_one_radio" ]
+  },
+  "cudy wr3000e v1": {
+    "name": "Cudy WR3000E v1.0",
+    "only_one_radio": true,
+    "wlan0": {
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "wlan1": {
+      "exclude_modes": [ "mesh" ],
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "features": [ "xlink" ]
+  },
+  "cudy wr3000h v1": {
+    "name": "Cudy WR3000H v1.0",
+    "wlan0": {
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "wlan1": {
+      "exclude_modes": [ "mesh" ],
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "features": [ "supernode", "videoproxy", "xlink", "only_one_radio" ]
+  },
+  "cudy wr3000p v1": {
+    "name": "Cudy WR3000P v1.0",
+    "wlan0": {
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "wlan1": {
+      "exclude_modes": [ "mesh" ],
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "features": [ "supernode", "videoproxy", "xlink", "only_one_radio" ]
+  },
+  "cudy wr3000s v1": {
+    "name": "Cudy WR3000P v1.0",
+    "wlan0": {
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "wlan1": {
+      "exclude_modes": [ "mesh" ],
+      "antenna": {
+        "description": "5.3 dBi Omni",
+        "gain": 5.3,
+        "beamwidth": 360
+      }
+    },
+    "features": [ "supernode", "videoproxy", "xlink", "only_one_radio" ]
+  },
+  "zyxel nwa55axe": {
+    "name": "Zyxel NWA66AXE",
+    "wlan0": {
+      "disabled": true
+    },
+    "wlan1": {
+      "exclude_modes": [ "mesh" ],
+      "antenna": "external"
+    }
   },
   "qemu": {
     "name": "QEMU PC",
