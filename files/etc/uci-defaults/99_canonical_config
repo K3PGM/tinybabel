@@ -72,8 +72,8 @@ const config = {
         },
         dmz: DELETE,
         downloads: {
-            firmware_aredn: "http://downloads.arednmesh.org",
-            packages_default: "http://downloads.arednmesh.org",
+            firmware_aredn: "http://downloads.k3pgm.radio",
+            packages_default: "http://downloads.k3pgm.radio",
             firmwarepath: DELETE,
             pkgs_core: DELETE,
             pkgs_base: DELETE,

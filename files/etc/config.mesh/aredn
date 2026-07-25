@@ -1,6 +1,6 @@
 
 config downloads
-        option firmwarepath 'http://downloads.arednmesh.org/firmware'
+        option firmwarepath 'http://downloads.k3pgm.radio/firmware'
 
 config poe
         option passthrough '0'
