@@ -37,7 +37,7 @@
 749-ubiquiti-extra-support.patch
 749-ubiquiti-firmware-version.patch
 750-ibss-2g-fix.patch
-#751-x86.patch
+751-x86.patch
 752-mikrotik-nand-revert.patch
 #753-ubiquiti-2ac.patch
 #754-openwrt-one.patch
