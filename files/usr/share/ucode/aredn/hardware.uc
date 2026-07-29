@@ -70,6 +70,10 @@ export function getBoard()
             boardJson.model.id = "virtualbox";
             boardJson.model.name = "VirtualBox";
         }
+        else if (index(lc(boardJson.model.id), "vultr") !== -1) {
+            boardJson.model.id = "vultr";
+            boardJson.model.name = "Vultr";
+        }
     }
     return boardJson;
 };
@@ -668,9 +672,9 @@ export function getMaxDistance(wifiIface)
         case "halow":
             const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} get ack_timeout_adjust`);
             if (p) {
-                const ack = int(p.read("line"));
+                const ack = p.read("all");
                 p.close();
-                return ack * 150;
+                return (int(ack) - 300) / 0.0067;
             }
             return -1;
         default:
@@ -683,15 +687,15 @@ export function setMaxDistance(wifiIface, distance)
 {
     switch (getRadioType(wifiIface)) {
         case "none":
-            break;
+            return -1;
         case "halow":
-            const ack = max(2, 2 * int(distance / 300));
-            // system(`/sbin/morse_cli -i ${wifiIface} set ack_timeout_adjust ${ack} > /dev/null 2>&1`);
-            break;
+            const ack = 300 + int(distance * 0.0067);
+            system(`/sbin/morse_cli -i ${wifiIface} set ack_timeout_adjust ${ack} > /dev/null 2>&1`);
+            return (ack - 300) / 0.0067;
         default:
             const coverage = min(255, int(distance / 450));
             system(`/usr/sbin/iw ${getPhyDevice(wifiIface)} set coverage ${coverage} > /dev/null 2>&1`);
-            break;
+            return coverage * 450;
     }
 };
 
@@ -878,6 +882,7 @@ export function getEthernetPorts()
         case "bhyve":
         case "virtualbox":
         case "pc":
+        case "vultr":
             if (length(defaultNPortLayout) === 0) {
                 const dir = fs.opendir("/sys/class/net");
                 if (dir) {
@@ -1021,6 +1026,9 @@ export function getHardwareType()
     }
     else if (match(mfg, /[Tt][Pp]-[Ll]ink/)) {
         mfgprefix = "cpe";
+    }
+    if (supportsFeature("boot-efi")) {
+        targettype += "-efi";
     }
     return `(${targettype}) ${mfgprefix ? mfgprefix + " " : ""}(${hardwaretype})`;
 };

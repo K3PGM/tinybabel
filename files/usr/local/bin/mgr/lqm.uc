@@ -204,6 +204,7 @@ function main()
     let rfLinks = {};
     let hiddenNodes = {};
     let lastDistance = -1;
+    let lastReadDistance = -1;
     let distance = -1;
     let noise = -95;
     let now = 0;
@@ -219,7 +220,9 @@ function main()
         case "ax":
         case "ac":
             lastDistance = config.max_distance;
-            hardware.setMaxDistance(wlan, lastDistance);
+            if (hardware.supportsFeature("max-distance", wlan)) {
+                lastReadDistance = hardware.setMaxDistance(wlan, lastDistance);
+            }
             break;
         case "n":
             iwSet("distance auto");
@@ -272,7 +275,7 @@ function main()
         });
 
         // Find our neighbors
-        const p = fs.popen("echo dump-neighbors | /usr/bin/socat UNIX-CLIENT:/var/run/babel.sock -");
+        const p = fs.popen("echo dump-neighbors | /usr/bin/socat UNIX-CLIENT:/var/run/babel.sock - 2>/dev/null");
         if (p) {
             for (let line = p.read("line"); length(line); line = p.read("line")) {
                 const m = match(line, /^add.*address ([^ \t]+) if ([^ \t]+) reach ([^ \t]+) .* rxcost ([^ \t]+) txcost ([^ \t]+)/);
@@ -734,9 +737,11 @@ function main()
             else {
                 distance = min(distance, config.max_distance);
             }
-            if (distance != lastDistance) {
-                lastDistance = distance;
-                hardware.setMaxDistance(wlan, distance);
+            if (hardware.supportsFeature("max-distance", wlan)) {
+                if (distance != lastDistance || lastReadDistance != hardware.getMaxDistance(wlan)) {
+                    lastDistance = distance;
+                    lastReadDistance = hardware.setMaxDistance(wlan, distance);
+                }
             }
 
             // Set the RTS/CTS state depending on whether everyone can see everyone
