@@ -12,3 +12,4 @@ openwrt/
 ._.DS_Store
 saved/
 .vscode
+/.project

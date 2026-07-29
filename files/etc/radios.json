@@ -48,6 +48,26 @@
   "gl.inet gl-ar750s (nor/nand)": {
     "maxpower": 23
   },
+  "gl.inet gl-a1300": {
+    "wlan0": {
+      "maxpower": 20,
+      "antenna": {
+        "description": "2.1 dBi Omni",
+        "gain": 2.1,
+        "beamwidth": 360
+      },
+      "exclude_channels": [ -4, -3, -2, -1 ]
+    },
+    "wlan1": {
+      "maxpower": 20,
+      "antenna": {
+        "description": "8.4 dBi Omni",
+        "gain": 8.4,
+        "beamwidth": 360
+      }
+    },
+    "features": [ "supernode", "xlink" ]
+  },
   "gl.inet gl-b1300": {
     "wlan0": {
       "maxpower": 20,
@@ -851,9 +871,14 @@
   },
   "0xe1f5": {
     "name": "Ubiquiti Rocket 5AC Lite",
-    "maxpower": 23,
-    "pwroffset": 4,
-    "antenna": "external",
+    "wlan0": {
+      "maxpower": 23,
+      "pwroffset": 4,
+      "antenna": "external"
+    },
+    "wlan1": {
+      "disabled": true
+    },
     "features": [ "xlink" ]
   },
   "0xe202": {
@@ -964,22 +989,32 @@
   },
   "0xe3d5": {
     "name": "Ubiquiti PowerBeam 5AC 500",
-    "maxpower": 24,
-    "pwroffset": 1,
-    "antenna": {
-      "description": "27 dBi 8&deg; Dish",
-      "gain": 27,
-      "beamwidth": 10
+    "wlan0": {
+      "maxpower": 24,
+      "pwroffset": 1,
+      "antenna": {
+        "description": "27 dBi 8&deg; Dish",
+        "gain": 27,
+        "beamwidth": 10
+      }
+    },
+    "wlan1": {
+      "disabled": true
     }
   },
   "0xe3d6": {
     "name": "Ubiquiti PowerBeam 5AC 400 / Gen2",
-    "maxpower": 23,
-    "pwroffset": 1,
-    "antenna": {
-      "description": "25 dBi 10&deg; Dish",
-      "gain": 25,
-      "beamwidth": 10
+    "wlan0": {
+      "maxpower": 23,
+      "pwroffset": 1,
+      "antenna": {
+        "description": "25 dBi 10&deg; Dish",
+        "gain": 25,
+        "beamwidth": 10
+      }
+    },
+    "wlan1": {
+      "disabled": true
     }
   },
   "0xe3d7": {
@@ -994,12 +1029,17 @@
   },
   "0xe7f5": {
     "name": "Ubiquiti PowerBeam 5AC 400",
-    "maxpower": 23,
-    "pwroffset": 1,
-    "antenna": {
-      "description": "25 dBi 10&deg; Dish",
-      "gain": 25,
-      "beamwidth": 10
+    "wlan0": {
+      "maxpower": 23,
+      "pwroffset": 1,
+      "antenna": {
+        "description": "25 dBi 10&deg; Dish",
+        "gain": 25,
+        "beamwidth": 10
+      }
+    },
+    "wlan1": {
+      "disabled": true
     }
   },
   "0xe3e5": {

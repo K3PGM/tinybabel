@@ -161,19 +161,14 @@ export function getRadioIntf(wifiIface)
     }
 };
 
-export function getPhyDevice(iface)
+export function getPhyDevice(wifiiface)
 {
-    return replace(replace(iface, /^wlan/, "phy"), /^radio/, "phy");
+    return replace(wifiiface, /^wlan/, "phy");
 };
 
-export function getWlanDevice(iface)
+export function getRadioDevice(wifiiface)
 {
-    return replace(replace(iface, /^phy/, "wlan"), /^radio/, "wlan");
-};
-
-export function getRadioDevice(iface)
-{
-    return replace(replace(iface, /^phy/, "radio"), /^wlan/, "radio");
+    return replace(wifiiface, /^wlan/, "radio");
 };
 
 function isAX(dev)
@@ -262,7 +257,7 @@ export function getChannelFromFrequency(wifiIface, freq)
 function getWiFiChannels(wifiIface)
 {
     const channels = [];
-    const info = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { wiphy: int(substr(wifiIface, 4)) });
+    const info = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { wiphy: int(substr(getPhyDevice(wifiIface), 3)) });
     if (!info) {
         return [];
     }
@@ -652,13 +647,14 @@ export function getRadioNoise(wifiIface)
             return survey[i].survey_info.noise;
         }
     }
-    // Fallback for hardware which doesn't support the survey api (e.g. HaLow)
-    const p = fs.popen(`/usr/bin/iwinfo ${wifiIface} info 2> /dev/null | /bin/grep Noise`);
-    if (p) {
-        const m = match(p.read("all"), /Noise: (-\d+) dBm/);
-        p.close();
-        if (m) {
-            return int(m[1]);
+    if (getRadioType(wifiIface) === "halow") {
+        const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} stats | grep 'Noise (dBm)'`);
+        if (p) {
+            const m = match(p.read("all"), /: (-\d+)/);
+            p.close();
+            if (m) {
+                return int(m[1]);
+            }
         }
     }
     return -95;
@@ -670,7 +666,7 @@ export function getMaxDistance(wifiIface)
         case "none":
             return -1;
         case "halow":
-            const p = fs.popen("/sbin/morse_cli get ack_timeout_adjust");
+            const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} get ack_timeout_adjust`);
             if (p) {
                 const ack = int(p.read("line"));
                 p.close();
@@ -678,7 +674,7 @@ export function getMaxDistance(wifiIface)
             }
             return -1;
         default:
-            const info = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { wiphy: int(substr(wifiIface, 4)) });
+            const info = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { wiphy: int(substr(getPhyDevice(wifiIface), 3)) });
             return info.wiphy_coverage_class * 450;
     }
 };
@@ -690,7 +686,7 @@ export function setMaxDistance(wifiIface, distance)
             break;
         case "halow":
             const ack = max(2, 2 * int(distance / 300));
-            system(`/sbin/morse_cli set ack_timeout_adjust ${ack} > /dev/null 2>&1`);
+            // system(`/sbin/morse_cli -i ${wifiIface} set ack_timeout_adjust ${ack} > /dev/null 2>&1`);
             break;
         default:
             const coverage = min(255, int(distance / 450));
@@ -847,6 +843,7 @@ export function supportsFeature(feature, arg1, arg2)
 };
 
 const default1PortLayout = [ { k: "lan", d: "lan" } ];
+const defaultAlt1PortLayout = [ { k: "eth0", d: "eth0" } ];
 const default5PortLayout = [ { k: "wan", d: "port1" }, { k: "lan1", d: "port2" }, { k: "lan2", d: "port3" }, { k: "lan3", d: "port4" }, { k: "lan4", d: "port5" } ];
 const default4PortLayout = [ { k: "wan", d: "port1" }, { k: "lan1", d: "port2" }, { k: "lan2", d: "port3" }, { k: "lan3", d: "port4" } ];
 const default3PortLayout = [ { k: "lan2", d: "port1" }, { k: "lan1", d: "port2" }, { k: "wan", d: "port3" } ];
@@ -867,6 +864,7 @@ export function getEthernetPorts()
         case "cudy,wr3000p-v1":
         case "cudy,wr3000s-v1":
             return default5PortLayout;
+        case "glinet,gl-a1300":
         case "glinet,gl-b1300":
             return default3PortLayout;
         case "openwrt,one":
@@ -902,7 +900,12 @@ export function getEthernetPorts()
             // Unspecified devices which support xlinks need ports to expose this in the UI.
             // We will assume they only have one port to simplify things.
             if (supportsFeature("xlink")) {
-                return default1PortLayout;
+                if (fs.access("/sys/class/net/lan")) {
+                    return default1PortLayout;
+                }
+                if (fs.access("/sys/class/net/eth0")) {
+                    return defaultAlt1PortLayout;
+                }
             }
             return [];
     }
