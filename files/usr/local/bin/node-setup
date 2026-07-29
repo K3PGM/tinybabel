@@ -575,7 +575,7 @@ let wg_mtu_override = cm.get("wireguard", "@network[0]", "mtu") ?? "";
 if (wg_mtu_override) {
     wg_mtu_override = `\toption mtu '${wg_mtu_override}'\n`;
 }
-const def_tun_cost = tonumber(cm.get("babel", "tunnel", "rxcost") || 1) || 0;
+const def_tun_cost = tonumber(cm.get("wireguard", "@network[0]", "cost") || cm.get("babel", "tunnel", "rxcost") || 300) || 300;
 cm.foreach("wireguard", "client",
     function(s) {
         const m1 = match(s.key, /^(.+=)(.+=)(.+=)(.+=)$/);
@@ -1220,12 +1220,19 @@ if (h && e && ah) {
     for (let i = 0; i < length(aliases); i++) {
         const m = match(aliases[i], /([^ \t]+)[ \t]+([^ \t]+)/);
         if (m) {
-            let host = m[2];
-            ah.write(`${m[1]}\t${host}\n`);
-            if (!match(host, /\./)) {
-                host += ".local.mesh";
+            const ip = m[1];
+            const host = m[2];
+            if (match(host, /^\*\./)) {
+                ah.write(`${ip}\t${host}.local.mesh\n`);
             }
-            h.write(`${m[1]}\t${host} #ALIAS\n`);
+            else if (match(host, /\./)) {
+                ah.write(`${ip}\t${host}\n`);
+                h.write(`${ip}\t${host} #ALIAS\n`);
+            }
+            else {
+                ah.write(`${ip}\t${host}\n`);
+                h.write(`${ip}\t${host}.local.mesh #ALIAS\n`);
+            }
         }
     }
 
@@ -1455,8 +1462,7 @@ for (let file in nfiles) {
                 break;
             }
             case "network":
-                changes.network = true;
-                changes.babel = true;
+                changes["network-soft"] = true;
                 break;
             case "dhcp":
                 changes.dnsmasq = true;
