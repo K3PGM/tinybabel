@@ -237,6 +237,11 @@ function expandVars(contents)
     return join("\n", nlines);
 }
 
+function ip2netname(ip)
+{
+    return sprintf("%02x%02x%02x%02x", ...ip);
+}
+
 // Load the configuration
 const cms = cm.get_all("setup", "globals") || {};
 for (let k in cms) {
@@ -253,6 +258,7 @@ let mesh_channel = "";
 let mesh_chanbw = "";
 let mesh_txpower = null;
 let mesh_distance = "";
+let mesh_wds = null;
 if (cfg.radio0_mode == "mesh" || cfg.radio0_mode == "meshap" || cfg.radio0_mode == "meshptp" || cfg.radio0_mode == "meshsta") {
     mesh_wifi = "wlan0";
     mesh_channel = tonumber(cfg.radio0_channel);
@@ -260,6 +266,9 @@ if (cfg.radio0_mode == "mesh" || cfg.radio0_mode == "meshap" || cfg.radio0_mode 
     mesh_ssid = cfg.radio0_ssid;
     mesh_txpower = tonumber(cfg.radio0_txpower);
     mesh_distance = tonumber(cfg.radio0_distance || 0);
+    if (cfg.radio0_mode == "meshap" || cfg.radio0_mode == "meshptp") {
+        mesh_wds = 1
+    }
 }
 else if (cfg.radio1_mode == "mesh" || cfg.radio1_mode == "meshap" || cfg.radio1_mode == "meshptp" || cfg.radio1_mode == "meshsta") {
     mesh_wifi = "wlan1";
@@ -268,6 +277,9 @@ else if (cfg.radio1_mode == "mesh" || cfg.radio1_mode == "meshap" || cfg.radio1_
     mesh_ssid = cfg.radio1_ssid;
     mesh_txpower = tonumber(cfg.radio1_txpower);
     mesh_distance = tonumber(cfg.radio1_distance || 0);
+    if (cfg.radio1_mode == "meshap" || cfg.radio1_mode == "meshptp") {
+        mesh_wds = 1
+    }
 }
 if (mesh_distance == 0) {
     mesh_distance = default_mesh_distance;
@@ -389,7 +401,7 @@ for (let i = 0; i < length(cnetworks); i++) {
     let config = "";
     // User override
     // Ignore wan override if wan wifi is enabled
-    if (fs.access(`/etc/aredn_include/${net}.network.user`) && !(net == wan && wan_wifi_enabled)) {
+    if (fs.access(`/etc/aredn_include/${net}.network.user`) && !(net == "wan" && wan_wifi_enabled)) {
         const f = fs.open(`/etc/aredn_include/fixedmac.${net}`);
         if (f) {
             for (let line = f.read("line"); length(line); line = f.read("line")) {
@@ -474,9 +486,14 @@ for (let i = 0; i < length(cnetworks); i++) {
             cfg.dtdlink_mask = "255.0.0.0";
         }
         else if (net == "wifi") {
-            wireless = true;
             cfg.wifi_proto = "static";
-            ports = [ mesh_wifi ];
+            if (mesh_wds) {
+                ports = [];
+            }
+            else {
+                wireless = true;
+                ports = [ mesh_wifi ];
+            }
         }
 
         if (vlan) {
@@ -570,8 +587,7 @@ let wg_mtu_override = cm.get("wireguard", "@network[0]", "mtu") ?? "";
 if (wg_mtu_override) {
     wg_mtu_override = `\toption mtu '${wg_mtu_override}'\n`;
 }
-const def_tun_cost = tonumber(cm.get("babel", "tunnel", "rxcost") || 1) || 0;
-let wgclients = 0;
+const def_tun_cost = tonumber(cm.get("wireguard", "@network[0]", "cost") || cm.get("babel", "tunnel", "rxcost") || 300) || 300;
 cm.foreach("wireguard", "client",
     function(s) {
         const m1 = match(s.key, /^(.+=)(.+=)(.+=)(.+=)$/);
@@ -584,16 +600,15 @@ cm.foreach("wireguard", "client",
             const abcd = iptoarr(addr);
             const ll = network.mac2ipv6ll(sprintf("00:00:%02x:%02x:%02x:%02x", abcd[0], abcd[1], abcd[2], abcd[3])) + "/64";
             const w = s.cost || def_tun_cost;
-            cfg.wireguard_network_config += sprintf("config interface 'wgc%d'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\toption listen_port '%s'\n\tlist addresses '%s'\n\tlist addresses '%s'\n\toption disabled '%s'\n%s\n",
-                wgclients, server_priv, w, port, addr, ll, (s.enabled == 1 ? "0" : "1"), wg_mtu_override);
-            cfg.wireguard_network_config += sprintf("config wireguard_wgc%d 'wireguard_wgc%d'\n\toption public_key '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
-                wgclients, wgclients, client_pub);
-            cfg.vpn_interfaces += `\tlist network 'wgc${wgclients}'\n`;
-            wgclients++;
+            const netname = ip2netname(abcd);
+            cfg.wireguard_network_config += sprintf("config interface 'wgc%s'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\toption listen_port '%s'\n\tlist addresses '%s'\n\tlist addresses '%s'\n\toption disabled '%s'\n%s\n",
+                netname, server_priv, w, port, addr, ll, (s.enabled == 1 ? "0" : "1"), wg_mtu_override);
+            cfg.wireguard_network_config += sprintf("config wireguard_wgc%s 'wireguard_wgc%s'\n\toption public_key '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
+                netname, netname, client_pub);
+            cfg.vpn_interfaces += `\tlist network 'wgc${netname}'\n`;
         }
     }
 );
-let wgservers = 0;
 cm.foreach("wireguard", "server",
     function(s) {
         const m1 = match(s.passwd, /^(.+=)(.+=)(.+=)$/);
@@ -607,12 +622,12 @@ cm.foreach("wireguard", "server",
             const p = m2[2];
             const ll = network.mac2ipv6ll(sprintf("00:00:%02x:%02x:%02x:%02x", abcd[0], abcd[1], abcd[2], abcd[3] + 1)) + "/64";
             const w = s.cost || def_tun_cost;
-            cfg.wireguard_network_config += sprintf("config interface 'wgs%d'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\tlist addresses '%d.%d.%d.%d'\n\tlist addresses '%s'\n\toption disabled '%s'\n%s\n",
-                wgservers, client_priv, w, abcd[0], abcd[1], abcd[2], abcd[3] + 1, ll, (s.enabled == 1 ? "0" : "1"), wg_mtu_override);
-            cfg.wireguard_network_config += sprintf("config wireguard_wgs%d 'wireguard_wgs%d'\n\toption public_key '%s'\n\toption endpoint_host '%s'\n\toption endpoint_port '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
-                wgservers, wgservers, server_pub, s.host, p);
-            cfg.vpn_interfaces += `\tlist network 'wgs${wgservers}'\n`;
-            wgservers++;
+            const netname = ip2netname(abcd);
+            cfg.wireguard_network_config += sprintf("config interface 'wgs%s'\n\toption proto 'wireguard'\n\toption private_key '%s'\n\toption nohostroute '1'\n\toption cost '%s'\n\tlist addresses '%d.%d.%d.%d'\n\tlist addresses '%s'\n\toption disabled '%s'\n%s\n",
+                netname, client_priv, w, abcd[0], abcd[1], abcd[2], abcd[3] + 1, ll, (s.enabled == 1 ? "0" : "1"), wg_mtu_override);
+            cfg.wireguard_network_config += sprintf("config wireguard_wgs%s 'wireguard_wgs%s'\n\toption public_key '%s'\n\toption endpoint_host '%s'\n\toption endpoint_port '%s'\n\toption persistent_keepalive '25'\n\tlist allowed_ips '0.0.0.0/0'\n\tlist allowed_ips '::/0'\n\n",
+                netname, netname, server_pub, s.host, p);
+            cfg.vpn_interfaces += `\tlist network 'wgs${netname}'\n`;
         }
     }
 );
@@ -935,6 +950,7 @@ for (let dev = 0; dev < ifacecount; dev++) {
         let shortgi = null;
         let bss_color = null;
         let htmode = hardware.getHTMode(wlan, wlan == mesh_wifi ? mesh_chanbw : -1, cfg[`${radio}_mode`]);
+        let wds = null;
 
         switch (hardware.getDefaultChannel(wlan)?.band) {
             case "3GHz":
@@ -1001,8 +1017,9 @@ for (let dev = 0; dev < ifacecount; dev++) {
             if (macaddr) {
                 macaddr = trim(replace(macaddr, /^..:/, "fe:"));
                 isolate = 1;
-                bss_color = int(match(macaddr, /:(..)$/)[1], 16);
+                //bss_color = int(match(macaddr, /:(..)$/)[1], 16);
             }
+            wds = mesh_wds;
         }
         else if (cfg[`${radio}_mode`] == "meshsta") {
             // mesh RF station configuration
@@ -1090,7 +1107,7 @@ for (let dev = 0; dev < ifacecount; dev++) {
         }
         config += `\toption path '${devpath}'\n`;
         if (bcf != null) {
-            config += `\toption bcf '${bcf}'\n\toption reconf '0'\n`;
+            config += `\toption bcf '${bcf}'\n\toption reconf '0'\n\toption enable_ps '0'\n`;
         }
         if (bss_color != null) {
             if (hwmode == "11ah") {
@@ -1146,6 +1163,9 @@ for (let dev = 0; dev < ifacecount; dev++) {
         }
         if (shortgi != null) {
             config += `\toption short_gi_20 '${shortgi}'\n\toption short_gi_40 '${shortgi}'\n`;
+        }
+        if (wds != null) {
+            config += `\toption wds '${wds}'\n`;
         }
 
         config += "\n";
@@ -1217,12 +1237,19 @@ if (h && e && ah) {
     for (let i = 0; i < length(aliases); i++) {
         const m = match(aliases[i], /([^ \t]+)[ \t]+([^ \t]+)/);
         if (m) {
-            let host = m[2];
-            ah.write(`${m[1]}\t${host}\n`);
-            if (!match(host, /\./)) {
-                host += ".local.mesh";
+            const ip = m[1];
+            const host = m[2];
+            if (match(host, /^\*\./)) {
+                ah.write(`${ip}\t${host}.local.mesh\n`);
             }
-            h.write(`${m[1]}\t${host} #ALIAS\n`);
+            else if (match(host, /\./)) {
+                ah.write(`${ip}\t${host}\n`);
+                h.write(`${ip}\t${host} #ALIAS\n`);
+            }
+            else {
+                ah.write(`${ip}\t${host}\n`);
+                h.write(`${ip}\t${host}.local.mesh #ALIAS\n`);
+            }
         }
     }
 
@@ -1306,9 +1333,6 @@ if (sf) {
         }
         sf.write(`/usr/sbin/iw ${hardware.getPhyDevice(mesh_wifi)} set txpower fixed 0\n`);
         sf.write(`/usr/sbin/iw ${hardware.getPhyDevice(mesh_wifi)} set txpower fixed ${mesh_txpower}00\n`);
-        if (hardware.getDefaultChannel(mesh_wifi)?.band === "HaLow") {
-            sf.write("/sbin/morse_cli ampdu enable\n");
-        }
     }
     sf.close();
     if (filecopy("/tmp/local_services", "/etc/local/services")) {
@@ -1455,9 +1479,7 @@ for (let file in nfiles) {
                 break;
             }
             case "network":
-                changes.network = true;
-                changes.babel = true;
-                changes.lqm = true; // and lqm because device assignment could change
+                changes["network-soft"] = true;
                 break;
             case "dhcp":
                 changes.dnsmasq = true;

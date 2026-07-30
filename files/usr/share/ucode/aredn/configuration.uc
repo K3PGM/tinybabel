@@ -35,6 +35,7 @@ import * as fs from "fs";
 import * as uci from "uci";
 import * as math from "math";
 import * as network from "aredn.network";
+import * as hardware from "aredn.hardware";
 
 let cursor;
 let scursor;
@@ -196,11 +197,6 @@ export function setPassword(passwd)
     fs.writefile("/tmp/newpassword", passwd);
 };
 
-export function isPasswordChanged()
-{
-    return fs.access("/tmp/newpassword") ? true : false;
-};
-
 export function getDHCP(mode)
 {
     initSetup();
@@ -353,8 +349,9 @@ export function commitChanges()
         removeConfig(currentConfig);
         if (fs.access("/tmp/newpassword")) {
             const pw = fs.readfile("/tmp/newpassword");
-            system(`/usr/local/bin/setpasswd ${shellEscape(pw)}`);
+            system(`/usr/local/bin/setpasswd ${shellEscape(pw)} > /dev/null 2>&1`);
             fs.unlink("/tmp/newpassword");
+            status.newpassword = true;
         }
         const n = fs.popen("exec /usr/local/bin/node-setup");
         if (n) {
@@ -493,13 +490,18 @@ export function restoreTunnels(tunnelBackupFilename)
 export function supportdata(supportdatafilename)
 {
     const c = uci.cursor();
-    const wifiiface = c.get("network", "wifi", "device");
 
-    let doscan = false;
+    const wifiiface0 = fs.access("/sys/class/net/wlan0") ? "wlan0" : null;
+    const wifiiface1 = fs.access("/sys/class/net/wlan1") ? "wlan1" : null;
+    let doscan0 = false;
+    let doscan1 = false;
     c.foreach("wireless", "wifi-iface", function(s)
     {
-        if (s.ifname == wifiiface && s.mode === "adhoc") {
-            doscan = true;
+        if (s.ifname == wifiiface0 && s.mode === "adhoc") {
+            doscan0 = true;
+        }
+        if (s.ifname == wifiiface1 && s.mode === "adhoc") {
+            doscan1 = true;
         }
     });
 
@@ -528,7 +530,8 @@ export function supportdata(supportdatafilename)
         "/proc/net/nf_conntrack",
         "/var/etc/babel-active.conf",
         "/var/run/hostapd-wlan0.maclist",
-        "/var/run/hostapd-wlan1.maclist"
+        "/var/run/hostapd-wlan1.maclist",
+        "/sys/kernel/debug/spi-nor/spi0.0/params"
     ];
     const sensitive = [
         "/etc/config/network",
@@ -557,11 +560,16 @@ export function supportdata(supportdatafilename)
         "ip rule list",
         "netstat -aln",
         "iwinfo",
-        `${wifiiface ? "iwinfo " + wifiiface + " assoclist" : ""}`,
-        `${wifiiface ? "iw phy " + (replace(wifiiface, "wlan", "phy")) + " info" : ""}`,
-        `${wifiiface ? "iw dev " + wifiiface + " info" : ""}`,
-        `${wifiiface && doscan ? "iw dev " + wifiiface + " scan" : ""}`,
-        `${wifiiface ? "iw dev " + wifiiface + " station dump" : ""}`,
+        `${wifiiface0 ? "iwinfo " + wifiiface0 + " assoclist" : ""}`,
+        `${wifiiface0 ? "iw phy " + hardware.getPhyDevice(wifiiface0) + " info" : ""}`,
+        `${wifiiface0 ? "iw dev " + wifiiface0 + " info" : ""}`,
+        `${wifiiface0 && doscan0 ? "iw dev " + wifiiface0 + " scan" : ""}`,
+        `${wifiiface0 ? "iw dev " + wifiiface0 + " station dump" : ""}`,
+        `${wifiiface1 ? "iwinfo " + wifiiface1 + " assoclist" : ""}`,
+        `${wifiiface1 ? "iw phy " + hardware.getPhyDevice(wifiiface1) + " info" : ""}`,
+        `${wifiiface1 ? "iw dev " + wifiiface1 + " info" : ""}`,
+        `${wifiiface1 && doscan1 ? "iw dev " + wifiiface1 + " scan" : ""}`,
+        `${wifiiface1 ? "iw dev " + wifiiface1 + " station dump" : ""}`,
         "wg show all",
         "wg show all latest-handshakes",
         "nft list ruleset",

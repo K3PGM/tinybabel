@@ -57,9 +57,8 @@ const PING6 = "/bin/ping6";
 // Get radio
 const device = radios.getMeshRadio();
 const wlan = device ? device.iface : "none";
-const wlanid = device ? replace(wlan, /^wlan/, "") : null;
-const phy = device ? `phy${wlanid}` : "none";
-const radio = device ? `radio${wlanid}` : "none";
+const phy = device ? hardware.getPhyDevice(wlan) : "none";
+const radio = device ? hardware.getRadioDevice(wlan) : "none";
 const devtype = hardware.getRadioType(wlan);
 
 let config = {};
@@ -185,7 +184,7 @@ function deviceToType(device)
     if (device == "br-dtdlink") {
         return "DtD";
     }
-    else if (match(device, /^wlan/)) {
+    else if (device === "br-wifi" || match(device, /^wlan/)) {
         return "RF";
     }
     else if (match(device, /^wg/)) {
@@ -205,6 +204,7 @@ function main()
     let rfLinks = {};
     let hiddenNodes = {};
     let lastDistance = -1;
+    let lastReadDistance = -1;
     let distance = -1;
     let noise = -95;
     let now = 0;
@@ -220,7 +220,9 @@ function main()
         case "ax":
         case "ac":
             lastDistance = config.max_distance;
-            hardware.setMaxDistance(wlan, lastDistance);
+            if (hardware.supportsFeature("max-distance", wlan)) {
+                lastReadDistance = hardware.setMaxDistance(wlan, lastDistance);
+            }
             break;
         case "n":
             iwSet("distance auto");
@@ -273,7 +275,7 @@ function main()
         });
 
         // Find our neighbors
-        const p = fs.popen("echo dump-neighbors | /usr/bin/socat UNIX-CLIENT:/var/run/babel.sock -");
+        const p = fs.popen("echo dump-neighbors | /usr/bin/socat -T 30 -t 30 UNIX-CLIENT:/var/run/babel.sock - 2>/dev/null");
         if (p) {
             for (let line = p.read("line"); length(line); line = p.read("line")) {
                 const m = match(line, /^add.*address ([^ \t]+) if ([^ \t]+) reach ([^ \t]+) .* rxcost ([^ \t]+) txcost ([^ \t]+)/);
@@ -313,6 +315,7 @@ function main()
         }
 
         // Update stats for tunnels and xlinks
+        const activeDevices = {};
         const istats = rtnl.request(rtnl.const.RTM_GETLINK, rtnl.const.NLM_F_DUMP, {});
         for (let i = 0; i < length(istats); i++) {
             const stat = istats[i];
@@ -326,6 +329,18 @@ function main()
                         break;
                     }
                 }
+            }
+            if (stat.dev) {
+                activeDevices[stat.dev] = true;
+            }
+        }
+
+        // Remove any trackers for devices which no longer exist
+        for (let mac in trackers) {
+            const track = trackers[mac];
+            const device = track.device;
+            if (device && !activeDevices[device]) {
+                delete trackers[mac];
             }
         }
 
@@ -454,6 +469,7 @@ function main()
                         // Failed to fetch information. Set time for retry and invalidate any information
                         // considered stale
                         track.refresh = now + refresh_retry_timeout;
+                        track.rev_lq = null;
                         track.rev_snr = null;
                         track.rev_ping_success_time = null;
                         track.rev_ping_quality = null;
@@ -513,6 +529,7 @@ function main()
                             for (let mac in rtrackers) {
                                 const rtrack = rtrackers[mac];
                                 if (myhostname == canonicalHostname(rtrack.hostname)) {
+                                    track.rev_lq = rtrack.lq;
                                     track.rev_ping_success_time = rtrack.ping_success_time;
                                     track.rev_ping_quality = rtrack.ping_quality;
                                     track.rev_quality = rtrack.quality;
@@ -589,24 +606,10 @@ function main()
                 update_interval: int(cursor.get("babel", "default", "update_interval"))
             };
             if (track.type === "Wireguard") {
-                track.babel_config.rxcost = int(cursor.get("babel", "tunnel", "rxcost"));
-                const weight = int(cursor.get("network", track.device, "weight"));
-                if (weight) {
-                    track.babel_config.rxcost += int(cursor.get("babel", "tunnel", "rxscale")) * weight;
-                }
+                track.babel_config.rxcost = int(cursor.get("wireguard", "@network[0]", "cost") || cursor.get("babel", "tunnel", "rxcost") || 300);
             }
             else if (track.type === "Xlink") {
                 track.babel_config.rxcost = int(cursor.get("babel", "xlink", "rxcost"));
-                let weight = null;
-                for (let x = 0; x < 16; x++) {
-                    if (cursor.get("network", `xlink${x}`, "ifname") == track.device) {
-                        weight = int(cursor.get("network", `xlink${x}`, "weight"));
-                        break;
-                    }
-                }
-                if (weight) {
-                    track.babel_config.rxcost += int(cursor.get("babel", "xlink", "rxscale")) * weight;
-                }
             }
             else {
                 track.babel_config.rxcost = int(cursor.get("babel", "default", "rxcost"));
@@ -735,9 +738,11 @@ function main()
             else {
                 distance = min(distance, config.max_distance);
             }
-            if (distance != lastDistance) {
-                lastDistance = distance;
-                hardware.setMaxDistance(wlan, distance);
+            if (hardware.supportsFeature("max-distance", wlan)) {
+                if (distance != lastDistance || lastReadDistance != hardware.getMaxDistance(wlan)) {
+                    lastDistance = distance;
+                    lastReadDistance = hardware.setMaxDistance(wlan, distance);
+                }
             }
 
             // Set the RTS/CTS state depending on whether everyone can see everyone
