@@ -56,7 +56,7 @@
  
  	start="$( dhcp_calc "$start" )"
 
---- a/package/network/services/dnsmasq/patches/0001-Fix-spurious-resource-limit-exceeded-messages.patch	2026-07-29 15:22:03.344570213 -0400
+--- a/package/network/services/dnsmasq/patches/0001-Fix-spurious-resource-limit-exceeded-messages.patch	2026-07-29 22:36:18.043184800 -0400
 +++ /dev/null
 @@ -1,43 +0,0 @@
 -From 1ed783b8d7343c42910a61f12a8fc6237eb80417 Mon Sep 17 00:00:00 2001
@@ -103,7 +103,7 @@
 -   /* Can't validate, as we're missing key data. Put this
 -      answer aside, whilst we get that. */     
 
---- a/package/network/services/dnsmasq/patches/0002-PATCH-Fix-error-introduced-in-51471cafa5a4fa44d6fe49.patch	2026-07-29 15:22:03.344570213 -0400
+--- a/package/network/services/dnsmasq/patches/0002-PATCH-Fix-error-introduced-in-51471cafa5a4fa44d6fe49.patch	2026-07-29 22:36:18.043184800 -0400
 +++ /dev/null
 @@ -1,31 +0,0 @@
 -From ccff85ad72d2f858d9743d40525128e4f62d41a8 Mon Sep 17 00:00:00 2001
@@ -138,7 +138,7 @@
 -       wildcard--;
 -       *wildcard = '*';
 
---- a/package/network/services/dnsmasq/patches/0003-Handle-DS-queries-to-auth-zones.patch	2026-07-29 15:22:03.344570213 -0400
+--- a/package/network/services/dnsmasq/patches/0003-Handle-DS-queries-to-auth-zones.patch	2026-07-29 22:36:18.043184800 -0400
 +++ /dev/null
 @@ -1,98 +0,0 @@
 -From 8ce27433f8b2e17c557cb55e4f16941d309deeac Mon Sep 17 00:00:00 2001
@@ -240,8 +240,8 @@
 - 	    }
 - 	}
 
---- a/package/network/services/dnsmasq/patches/100-remove-old-runtime-kernel-support.patch	2026-07-29 18:59:46.810249673 -0400
-+++ b/package/network/services/dnsmasq/patches/100-remove-old-runtime-kernel-support.patch	2026-07-29 19:12:00.666032470 -0400
+--- a/package/network/services/dnsmasq/patches/100-remove-old-runtime-kernel-support.patch	2026-07-29 22:36:18.043184800 -0400
++++ b/package/network/services/dnsmasq/patches/100-remove-old-runtime-kernel-support.patch	2026-07-29 22:46:30.836043064 -0400
 @@ -13,7 +13,7 @@
  
  --- a/src/dnsmasq.c
@@ -269,14 +269,11 @@
   void close_fds(long max_fd, int spare1, int spare2, int spare3);
   int wildcard_match(const char* wildcard, const char* match);
   int wildcard_matchn(const char* wildcard, const char* match, int num);
-@@ -138,14 +138,12 @@
-  
-    if (ret == -1)
+@@ -140,11 +140,10 @@
        my_syslog(LOG_ERR, _("failed to update ipset %s: %s"), setname, strerror(errno));
--
  --- a/src/util.c
  +++ b/src/util.c
--@@ -927,22 +927,3 @@ int wildcard_matchn(const char* wildcard
+-@@ -866,22 +866,3 @@ int wildcard_matchn(const char* wildcard
 - 
 +@@ -928,25 +928,6 @@ int wildcard_matchn(const char* wildcard
     return (!num) || (*wildcard == *match);
@@ -286,7 +283,7 @@
  -#ifdef HAVE_LINUX_NETWORK
  -int kernel_version(void)
  -{
-@@ -164,3 +162,7 @@
+@@ -163,3 +162,7 @@
  -  return version * 256 + (split ? atoi(split) : 0);
  -}
  -#endif
@@ -295,7 +292,7 @@
 + 
 + void *whine_malloc_real(const char *func, unsigned int line, size_t size)
 
---- a/package/network/services/dnsmasq/patches/110.disable-ipv6.patch	2026-07-29 15:25:24.272988230 -0400
+--- a/package/network/services/dnsmasq/patches/110.disable-ipv6.patch	2026-07-29 22:36:18.043184800 -0400
 +++ /dev/null
 @@ -1,12 +0,0 @@
 ---- a/src/config.h
@@ -311,7 +308,7 @@
 - #define HAVE_SCRIPT
 - #define HAVE_AUTH
 
---- a/package/network/services/dnsmasq/patches/111.disable-ipv6-forwarding.patch	2026-07-29 15:25:24.272988230 -0400
+--- a/package/network/services/dnsmasq/patches/111.disable-ipv6-forwarding.patch	2026-07-29 22:36:18.043184800 -0400
 +++ /dev/null
 @@ -1,13 +0,0 @@
 ---- a/src/forward.c
@@ -328,8 +325,8 @@
 -       /* Configured answer. */
 -       if (flags || ede == EDE_NOT_READY)
 
---- a/package/network/services/dnsmasq/patches/200-ubus_dns.patch	2026-07-29 15:22:03.344570213 -0400
-+++ b/package/network/services/dnsmasq/patches/200-ubus_dns.patch	2026-07-29 19:14:19.732993545 -0400
+--- a/package/network/services/dnsmasq/patches/200-ubus_dns.patch	2026-07-29 22:36:18.043184800 -0400
++++ b/package/network/services/dnsmasq/patches/200-ubus_dns.patch	2026-07-29 22:47:11.116885663 -0400
 @@ -1,19 +1,19 @@
  --- a/src/dnsmasq.c
  +++ b/src/dnsmasq.c
