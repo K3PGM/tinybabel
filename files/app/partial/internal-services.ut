@@ -38,7 +38,7 @@
     const cm = uci.get("aredn", "@supernode[0]", "support") === "0" ? "disabled" : "active";
     const wd = uci.get("aredn", "@watchdog[0]", "enable") === "1" ? "active" : "disabled";
     const wwd = uci.get("aredn", "@wireless_watchdog[0]", "enable") === "1" ? "active" : "disabled";
-    const ip = uci.get("aredn", "@iperf[0]", "enable") === "0" ? "disabled" : "active";
+    const ip = fs.stat("/usr/bin/iperf3") ? (uci.get("aredn", "@iperf[0]", "enable") === "0" ? "disabled" : "active") : "inactive";
     const be = uci.get("aredn", "@beacon[0]", "enable") !== "1" ? "disabled" : "active";
     const s = fs.stat("/tmp/metrics-ran");
     const mt = s && time() - s.mtime < 3600000 ? "active" : "inactive";
