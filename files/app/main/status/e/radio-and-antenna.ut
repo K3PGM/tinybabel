@@ -283,6 +283,8 @@ if (request.env.REQUEST_METHOD === "DELETE") {
                 const macaddress = wlan[w].macaddress;
                 const ishalow = hardware.getRadioType(wlan[w].iface) === "halow";
                 const nochan = mode === radios.RADIO_MESH && !ishalow;
+                const have_ap = fs.stat("/usr/sbin/hostapd");
+                const have_sta = fs.stat("/usr/sbin/wpa_supplicant");
     %}
         <div id="radio{{w}}" class="hideable compact" data-hideable="{{modemap[mode] || 0}}">
             <div class="cols">
@@ -296,19 +298,19 @@ if (request.env.REQUEST_METHOD === "DELETE") {
                         {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "mesh")) { %}
                         <option value="1" {{mode === radios.RADIO_MESH ? "selected" : ""}}>Mesh</option>
                         {% } %}
-                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshap")) { %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshap") && have_ap) { %}
                         <option value="4" {{mode === radios.RADIO_MESHPTMP ? "selected" : ""}}>Mesh PtMP</option>
                         {% } %}
-                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshptp")) { %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshptp") && have_ap) { %}
                         <option value="5" {{mode === radios.RADIO_MESHPTP ? "selected" : ""}}>Mesh PtP</option>
                         {% } %}
-                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshsta")) { %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshsta") && have_sta) { %}
                         <option value="6" {{mode === radios.RADIO_MESHSTA ? "selected" : ""}}>Mesh Station</option>
                         {% } %}
-                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "lan")) { %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "lan") && have_ap) { %}
                         <option value="2" {{mode === radios.RADIO_LAN ? "selected" : ""}}>LAN Hotspot</option>
                         {% } %}
-                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "wan")) { %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "wan") && have_sta) { %}
                         <option value="3" {{mode === radios.RADIO_WAN ? "selected" : ""}}>WAN Client</option>
                         {% } %}
                     </select>
