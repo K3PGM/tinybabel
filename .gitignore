@@ -13,3 +13,4 @@ openwrt/
 saved/
 .vscode
 /.project
+/.gitattributes
