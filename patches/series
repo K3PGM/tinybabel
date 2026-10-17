@@ -14,6 +14,7 @@
 703-disable-ipv6-dnsmasq.patch
 704-enable-telnet.patch
 704-dnsmasq-fixes.patch
+704-dnsmasq-have-nftset.patch
 705-aredn-banner.patch
 706-MeshNode-SSID.patch
 708-define-aredn-ath79-networks.patch
@@ -52,6 +53,7 @@
 760-uhttp-redirect.patch
 761-ucode-zlib.patch
 761-ucode-flush.patch
+762-ucode-rtnlclose.patch
 780-restore-request-class.patch
 #790-morsemicro-support.patch
 #791-morsemicro-remove-patches.patch
