@@ -51,7 +51,8 @@
 760-uhttp-inhibit-chunked.patch
 760-uhttp-ucode.patch
 760-uhttp-redirect.patch
-761-ucode-zlib.patch
+761-ucode-upgrade.patch
+#761-ucode-zlib.patch
 761-ucode-flush.patch
 762-ucode-rtnlclose.patch
 780-restore-request-class.patch
