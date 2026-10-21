@@ -1,0 +1,452 @@
+diff --git a/package/utils/ucode/Makefile b/package/utils/ucode/Makefile
+index ed155af02f..b38579b837 100644
+--- a/package/utils/ucode/Makefile
++++ b/package/utils/ucode/Makefile
+@@ -12,9 +12,9 @@ PKG_RELEASE:=1
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL=https://github.com/jow-/ucode.git
+-PKG_SOURCE_DATE:=2025-05-11
+-PKG_SOURCE_VERSION:=d5b3a9dc1091dd28cf6f0f60cd34fc322ef27717
+-PKG_MIRROR_HASH:=cd8af9d5ac28e2530b56015a3f2fcf6f36062546cac8b23a5f7b75b367209b54
++PKG_SOURCE_DATE:=2026-01-16
++PKG_SOURCE_VERSION:=85922056ef7abeace3cca3ab28bc1ac2d88e31b1
++PKG_MIRROR_HASH:=8c6f586f90e704827dc8736bf3726d15989a978c6a726a52d51e33f8019403b6
+ PKG_MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
+ PKG_LICENSE:=ISC
+ 
+@@ -53,6 +53,7 @@ CMAKE_HOST_OPTIONS += \
+ 	-DULOOP_SUPPORT=OFF \
+ 	-DDEBUG_SUPPORT=ON \
+ 	-DLOG_SUPPORT=OFF \
++	-DZLIB_SUPPORT=ON \
+ 	-DDIGEST_SUPPORT=OFF
+ 
+ 
+@@ -184,6 +185,14 @@ $(eval $(call UcodeModule, \
+ 	digest, DIGEST_SUPPORT, , \
+ 	The digest module allows ucode scripts to use libmd digests.))
+ 
++$(eval $(call UcodeModule, \
++	io, IO_SUPPORT, , \
++	The io module allows direct file descriptor read/write (including non-blocking).))
++
++$(eval $(call UcodeModule, \
++	zlib, ZLIB_SUPPORT, +zlib, \
++	The zlib module allows ucode scripts to de/compress gzip and zlib formats.))
++
+ $(eval $(call BuildPackage,libucode))
+ $(eval $(call BuildPackage,ucode))
+ 
+diff --git a/package/utils/ucode/patches/010-ubus-fix-double-registry-clear-on-disconnect.patch b/package/utils/ucode/patches/010-ubus-fix-double-registry-clear-on-disconnect.patch
+deleted file mode 100644
+index 70b6a99be7..0000000000
+--- a/package/utils/ucode/patches/010-ubus-fix-double-registry-clear-on-disconnect.patch
++++ /dev/null
+@@ -1,26 +0,0 @@
+-From: Felix Fietkau <nbd@nbd.name>
+-Date: Fri, 9 May 2025 11:57:57 +0200
+-Subject: [PATCH] ubus: fix double registry clear on disconnect
+-
+-Set c->registry_index to -1 in order to ensure that the resource free path
+-does not clobber registry items of unrelated connections.
+-
+-Signed-off-by: Felix Fietkau <nbd@nbd.name>
+----
+-
+---- a/lib/ubus.c
+-+++ b/lib/ubus.c
+-@@ -2375,8 +2375,11 @@ uc_ubus_channel_disconnect_cb(struct ubu
+- 		c->ctx.sock.fd = -1;
+- 	}
+- 
+--	if (c->registry_index >= 0)
+--		connection_reg_clear(c->vm, c->registry_index);
+-+	if (c->registry_index >= 0) {
+-+		int idx = c->registry_index;
+-+		c->registry_index = -1;
+-+		connection_reg_clear(c->vm, idx);
+-+	}
+- }
+- 
+- static uc_value_t *
+diff --git a/package/utils/ucode/patches/020-ubus-fix-use-after-free-on-deferred-request-reply-me.patch b/package/utils/ucode/patches/020-ubus-fix-use-after-free-on-deferred-request-reply-me.patch
+deleted file mode 100644
+index 142595a5bd..0000000000
+--- a/package/utils/ucode/patches/020-ubus-fix-use-after-free-on-deferred-request-reply-me.patch
++++ /dev/null
+@@ -1,27 +0,0 @@
+-From: Felix Fietkau <nbd@nbd.name>
+-Date: Mon, 12 May 2025 12:43:44 +0200
+-Subject: [PATCH] ubus: fix use-after-free on deferred request reply() method
+-
+-Hold a reference to the defer resource as long as it is still needed
+-
+-Signed-off-by: Felix Fietkau <nbd@nbd.name>
+----
+-
+---- a/lib/ubus.c
+-+++ b/lib/ubus.c
+-@@ -636,6 +636,7 @@ uc_ubus_call_user_cb(uc_ubus_deferred_t
+- 	uc_value_t *this, *func;
+- 
+- 	request_reg_get(defer->vm, defer->registry_index, &this, &func, NULL, NULL);
+-+	ucv_get(this);
+- 
+- 	if (ucv_is_callable(func)) {
+- 		uc_vm_stack_push(defer->vm, ucv_get(this));
+-@@ -648,6 +649,7 @@ uc_ubus_call_user_cb(uc_ubus_deferred_t
+- 	}
+- 
+- 	request_reg_clear(defer->vm, defer->registry_index);
+-+	ucv_put(this);
+- }
+- 
+- static void
+diff --git a/package/utils/ucode/patches/100-add-include-for-older-kernels.patch b/package/utils/ucode/patches/100-add-include-for-older-kernels.patch
+new file mode 100644
+index 0000000000..f047bed928
+--- /dev/null
++++ b/package/utils/ucode/patches/100-add-include-for-older-kernels.patch
+@@ -0,0 +1,20 @@
++From 165d395ffa2a22e293160b24d4791302a156eab8 Mon Sep 17 00:00:00 2001
++From: Rosen Penev <rosenp@gmail.com>
++Date: Mon, 8 Dec 2025 12:48:01 -0800
++Subject: add include for older kernels
++
++in6.h is needed for some macros. Seems newer kernels include this implicitly.
++---
++ lib/socket.c | 1 +
++ 1 file changed, 1 insertion(+)
++
++--- a/lib/socket.c
+++++ b/lib/socket.c
++@@ -77,6 +77,7 @@
++ #include "ucode/platform.h"
++ 
++ #if defined(__linux__)
+++# include <linux/in6.h>
++ # include <linux/if_packet.h>
++ # include <linux/filter.h>
++ 
+diff --git a/package/utils/ucode/patches/110-uloop-allow-reusing-the-existing-environment.patch b/package/utils/ucode/patches/110-uloop-allow-reusing-the-existing-environment.patch
+new file mode 100644
+index 0000000000..33b0261a71
+--- /dev/null
++++ b/package/utils/ucode/patches/110-uloop-allow-reusing-the-existing-environment.patch
+@@ -0,0 +1,57 @@
++From: Felix Fietkau <nbd@nbd.name>
++Date: Wed, 8 Oct 2025 19:11:46 +0200
++Subject: [PATCH] uloop: allow reusing the existing environment
++
++When passing null as environment argument, reuse existing environ.
++This makes it possible to avoid having to duplicate and convert it
++by passing the output of getenv().
++
++Signed-off-by: Felix Fietkau <nbd@nbd.name>
++---
++
++--- a/lib/uloop.c
+++++ b/lib/uloop.c
++@@ -1023,7 +1023,22 @@ uc_uloop_process(uc_vm_t *vm, size_t nar
++ 
++ 	if (pid == 0) {
++ 		argp = calloc(ucv_array_length(arguments) + 2, sizeof(char *));
++-		envp = calloc(ucv_object_length(env_arg) + 1, sizeof(char *));
+++		envp = environ;
+++
+++		if (env_arg) {
+++			envp = calloc(ucv_object_length(env_arg) + 1, sizeof(char *));
+++			i = 0;
+++			ucv_object_foreach(env_arg, envk, envv) {
+++				buf = xprintbuf_new();
+++
+++				ucv_stringbuf_printf(buf, "%s=", envk);
+++				ucv_to_stringbuf(vm, buf, envv, false);
+++
+++				envp[i++] = buf->buf;
+++
+++				free(buf);
+++			}
+++		}
++ 
++ 		if (!argp || !envp)
++ 			_exit(-1);
++@@ -1033,19 +1048,6 @@ uc_uloop_process(uc_vm_t *vm, size_t nar
++ 		for (i = 0; i < ucv_array_length(arguments); i++)
++ 			argp[i+1] = ucv_to_string(vm, ucv_array_get(arguments, i));
++ 
++-		i = 0;
++-
++-		ucv_object_foreach(env_arg, envk, envv) {
++-			buf = xprintbuf_new();
++-
++-			ucv_stringbuf_printf(buf, "%s=", envk);
++-			ucv_to_stringbuf(vm, buf, envv, false);
++-
++-			envp[i++] = buf->buf;
++-
++-			free(buf);
++-		}
++-
++ 		execvpe((const char *)ucv_string_get(executable),
++ 		        (char * const *)argp, (char * const *)envp);
++ 
+diff --git a/package/utils/ucode/patches/111-uloop-add-optional-setup-callback-to-process.patch b/package/utils/ucode/patches/111-uloop-add-optional-setup-callback-to-process.patch
+new file mode 100644
+index 0000000000..e8f597ade7
+--- /dev/null
++++ b/package/utils/ucode/patches/111-uloop-add-optional-setup-callback-to-process.patch
+@@ -0,0 +1,85 @@
++From: Felix Fietkau <nbd@nbd.name>
++Date: Wed, 8 Oct 2025 22:06:46 +0200
++Subject: [PATCH] uloop: add optional setup callback to process()
++
++Add optional setup callback as 5th argument to uloop.process() that is
++invoked in the child process after fork() but before exec().
++
++Signed-off-by: Felix Fietkau <nbd@nbd.name>
++---
++
++--- a/lib/uloop.c
+++++ b/lib/uloop.c
++@@ -968,8 +968,9 @@ uc_uloop_process_cb(struct uloop_process
++  *
++  * This function creates a process instance for executing external programs.
++  * It takes the executable path string, an optional string array as the argument
++- * vector, an optional dictionary describing environment variables, and a
++- * callback function to be invoked when the invoked process ends.
+++ * vector, an optional dictionary describing environment variables, a
+++ * callback function to be invoked when the invoked process ends, and an optional
+++ * setup callback to be invoked in the child process after fork().
++  *
++  * @function module:uloop#process
++  *
++@@ -986,6 +987,11 @@ uc_uloop_process_cb(struct uloop_process
++  * @param {Function} callback
++  * The callback function to be invoked when the invoked process ends.
++  *
+++ * @param {Function} [setup]
+++ * Optional. A callback function to be invoked in the child process after fork()
+++ * but before exec(). This can be used to set up file descriptors, change working
+++ * directory, or perform other initialization.
+++ *
++  * @returns {?module:uloop.process}
++  * Returns a process instance for executing external programs.
++  * Returns `null` on error, e.g. due to `exec()` failure or invalid arguments.
++@@ -995,6 +1001,16 @@ uc_uloop_process_cb(struct uloop_process
++  * const myProcess = uloop.process("/bin/ls", ["-l", "/tmp"], null, (code) => {
++  *     printf(`Process exited with code ${code}\n`);
++  * });
+++ *
+++ * // With setup callback to redirect stderr
+++ * const myProcess = uloop.process("/bin/ls", ["-l", "/tmp"], null, (code) => {
+++ *     printf(`Process exited with code ${code}\n`);
+++ * }, () => {
+++ *     const fs = require('fs');
+++ *     const errlog = fs.open('/tmp/error.log', 'w');
+++ *     fs.dup2(errlog.fileno(), 2);
+++ *     errlog.close();
+++ * });
++  */
++ static uc_value_t *
++ uc_uloop_process(uc_vm_t *vm, size_t nargs)
++@@ -1003,6 +1019,7 @@ uc_uloop_process(uc_vm_t *vm, size_t nar
++ 	uc_value_t *arguments = uc_fn_arg(1);
++ 	uc_value_t *env_arg = uc_fn_arg(2);
++ 	uc_value_t *callback = uc_fn_arg(3);
+++	uc_value_t *setup_cb = uc_fn_arg(4);
++ 	uc_uloop_process_t *process;
++ 	uc_stringbuf_t *buf;
++ 	char **argp, **envp;
++@@ -1012,7 +1029,8 @@ uc_uloop_process(uc_vm_t *vm, size_t nar
++ 	if (ucv_type(executable) != UC_STRING ||
++ 	    (arguments && ucv_type(arguments) != UC_ARRAY) ||
++ 	    (env_arg && ucv_type(env_arg) != UC_OBJECT) ||
++-	    !ucv_is_callable(callback)) {
+++	    !ucv_is_callable(callback) ||
+++	    (setup_cb && !ucv_is_callable(setup_cb))) {
++ 		err_return(EINVAL);
++ 	}
++ 
++@@ -1022,6 +1040,13 @@ uc_uloop_process(uc_vm_t *vm, size_t nar
++ 		err_return(errno);
++ 
++ 	if (pid == 0) {
+++		if (setup_cb) {
+++			uc_vm_stack_push(vm, ucv_get(setup_cb));
+++
+++			if (uc_uloop_vm_call(vm, false, 0))
+++				ucv_put(uc_vm_stack_pop(vm));
+++		}
+++
++ 		argp = calloc(ucv_array_length(arguments) + 2, sizeof(char *));
++ 		envp = environ;
++ 
+diff --git a/package/utils/ucode/patches/120-ubus-fix-refcounting-bug.patch b/package/utils/ucode/patches/120-ubus-fix-refcounting-bug.patch
+new file mode 100644
+index 0000000000..1f3218a3c8
+--- /dev/null
++++ b/package/utils/ucode/patches/120-ubus-fix-refcounting-bug.patch
+@@ -0,0 +1,25 @@
++From: Felix Fietkau <nbd@nbd.name>
++Date: Fri, 6 Feb 2026 19:04:54 +0000
++Subject: [PATCH] ubus: fix refcounting bug
++
++In uc_ubus_channel_req_cb an extra ref is taken for args and method,
++which are not used elsewhere.
++
++Signed-off-by: Felix Fietkau <nbd@nbd.name>
++---
++
++--- a/lib/ubus.c
+++++ b/lib/ubus.c
++@@ -2395,10 +2395,10 @@ uc_ubus_channel_req_cb(struct ubus_conte
++ 
++ 	args = blob_array_to_ucv(c->vm, blob_data(msg), blob_len(msg), true);
++ 	reqproto = ucv_object_new(c->vm);
++-	ucv_object_add(reqproto, "args", ucv_get(args));
+++	ucv_object_add(reqproto, "args", args);
++ 
++ 	if (method)
++-		ucv_object_add(reqproto, "type", ucv_get(ucv_string_new(method)));
+++		ucv_object_add(reqproto, "type", ucv_string_new(method));
++ 
++ 	return uc_ubus_handle_reply_common(ctx, req, c->vm, c->res, func, reqproto);
++ }
+diff --git a/package/utils/ucode/patches/121-ubus-avoid-double-close-of-externally-owned-channel-.patch b/package/utils/ucode/patches/121-ubus-avoid-double-close-of-externally-owned-channel-.patch
+new file mode 100644
+index 0000000000..51e3bf2bf2
+--- /dev/null
++++ b/package/utils/ucode/patches/121-ubus-avoid-double-close-of-externally-owned-channel-.patch
+@@ -0,0 +1,130 @@
++From: Felix Fietkau <nbd@nbd.name>
++Date: Fri, 6 Feb 2026 20:19:59 +0000
++Subject: [PATCH] ubus: avoid double close of externally owned channel fds
++
++When a channel is opened via an fd obtained through fileno(), the fd is
++owned by an external resource. Track this in fd_handle and detach from
++uloop without closing the fd on disconnect/shutdown.
++
++Signed-off-by: Felix Fietkau <nbd@nbd.name>
++---
++
++--- a/lib/ubus.c
+++++ b/lib/ubus.c
++@@ -132,6 +132,7 @@ typedef struct {
++ 	struct ubus_context ctx;
++ 	struct blob_buf buf;
++ 	int timeout;
+++	bool fd_handle;
++ 
++ 	uc_vm_t *vm;
++ 	uc_value_t *res;
++@@ -739,7 +740,7 @@ uc_ubus_call_timeout_cb(struct uloop_tim
++ }
++ 
++ static int
++-get_fd(uc_vm_t *vm, uc_value_t *val)
+++get_fd(uc_vm_t *vm, uc_value_t *val, bool *handle)
++ {
++ 	uc_value_t *fn;
++ 	int64_t n;
++@@ -747,6 +748,9 @@ get_fd(uc_vm_t *vm, uc_value_t *val)
++ 	fn = ucv_property_get(val, "fileno");
++ 
++ 	if (ucv_is_callable(fn)) {
+++		if (handle)
+++			*handle = true;
+++
++ 		uc_vm_stack_push(vm, ucv_get(val));
++ 		uc_vm_stack_push(vm, ucv_get(fn));
++ 
++@@ -816,7 +820,7 @@ uc_ubus_call_common(uc_vm_t *vm, uc_ubus
++ 		ucv_object_to_blob(funargs, &c->buf);
++ 
++ 	if (fd) {
++-		fd_val = get_fd(vm, fd);
+++		fd_val = get_fd(vm, fd, NULL);
++ 
++ 		if (fd_val < 0)
++ 			errval_return(UBUS_STATUS_INVALID_ARGUMENT,
++@@ -938,7 +942,7 @@ uc_ubus_defer_common(uc_vm_t *vm, uc_ubu
++ 		ucv_object_to_blob(funargs, &c->buf);
++ 
++ 	if (fd) {
++-		fd_val = get_fd(vm, fd);
+++		fd_val = get_fd(vm, fd, NULL);
++ 
++ 		if (fd_val < 0)
++ 			errval_return(UBUS_STATUS_INVALID_ARGUMENT,
++@@ -1174,7 +1178,7 @@ uc_ubus_request_set_fd(uc_vm_t *vm, size
++ 	if (!callctx)
++ 		err_return(UBUS_STATUS_INVALID_ARGUMENT, "Invalid call context");
++ 
++-	fd = get_fd(vm, uc_fn_arg(0));
+++	fd = get_fd(vm, uc_fn_arg(0), NULL);
++ 
++ 	if (fd < 0)
++ 		err_return(UBUS_STATUS_INVALID_ARGUMENT, "Invalid file descriptor");
++@@ -2313,6 +2317,10 @@ uc_ubus_disconnect(uc_vm_t *vm, size_t n
++ #ifdef HAVE_UBUS_FLUSH_REQUESTS
++ 	ubus_flush_requests(&c->ctx);
++ #endif
+++	if (c->fd_handle) {
+++		uloop_fd_delete(&c->ctx.sock);
+++		c->ctx.sock.fd = -1;
+++	}
++ 	ubus_shutdown(&c->ctx);
++ 	c->ctx.sock.fd = -1;
++ 	uc_ubus_put_res(&c->res);
++@@ -2422,6 +2430,10 @@ uc_ubus_channel_disconnect_cb(struct ubu
++ 	blob_buf_free(&c->buf);
++ 
++ 	if (c->ctx.sock.fd >= 0) {
+++		if (c->fd_handle) {
+++			uloop_fd_delete(&c->ctx.sock);
+++			c->ctx.sock.fd = -1;
+++		}
++ 		ubus_shutdown(&c->ctx);
++ 		c->ctx.sock.fd = -1;
++ 	}
++@@ -2486,6 +2498,7 @@ uc_ubus_channel_connect(uc_vm_t *vm, siz
++ {
++ #ifdef HAVE_UBUS_CHANNEL_SUPPORT
++ 	uc_value_t *fd, *cb, *disconnect_cb, *timeout;
+++	bool handle = false;
++ 	uc_ubus_connection_t *c;
++ 	int fd_val;
++ 
++@@ -2495,7 +2508,7 @@ uc_ubus_channel_connect(uc_vm_t *vm, siz
++ 	         "disconnect_cb", UC_CLOSURE, true, &disconnect_cb,
++ 	         "timeout", UC_INTEGER, true, &timeout);
++ 
++-	fd_val = get_fd(vm, fd);
+++	fd_val = get_fd(vm, fd, &handle);
++ 
++ 	if (fd_val < 0)
++ 		err_return(UBUS_STATUS_INVALID_ARGUMENT, "Invalid file descriptor argument");
++@@ -2505,6 +2518,8 @@ uc_ubus_channel_connect(uc_vm_t *vm, siz
++ 	if (!c)
++ 		return NULL;
++ 
+++	c->fd_handle = handle;
+++
++ 	if (ubus_channel_connect(&c->ctx, fd_val, cb ? uc_ubus_channel_req_cb : NULL)) {
++ 		ucv_put(c->res);
++ 		err_return(UBUS_STATUS_UNKNOWN_ERROR, "Unable to create ubus channel");
++@@ -2602,8 +2617,13 @@ static void free_connection(void *ud) {
++ 
++ 	blob_buf_free(&conn->buf);
++ 
++-	if (conn->ctx.sock.fd >= 0)
+++	if (conn->ctx.sock.fd >= 0) {
+++		if (conn->fd_handle) {
+++			uloop_fd_delete(&conn->ctx.sock);
+++			conn->ctx.sock.fd = -1;
+++		}
++ 		ubus_shutdown(&conn->ctx);
+++	}
++ }
++ 
++ static void free_deferred(void *ud) {
