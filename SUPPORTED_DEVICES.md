@@ -38,7 +38,7 @@ PicoStation M2 || 2 | ath79 | tiny (1) | ubnt_picostation-m | 32MB | untested | 
 
 
 ## Footnotes
- 1. Tiny builds exclude support for *tunnels* and *WiFi AP* mode for lack of resources. The relevant packages can be installed separately but doing so is not recommended.
+ 1. To conserve resources, +tiny builds exclude support for *tunnels* and *iPerf*, but the relevant packages can be installed separately. Do not set up a tunnel where it would be your only access to a +tiny node; after an upgrade, the wireguard-tools package will automatically be reloaded, but manual intervention is required to reactivate the tunnel. *WiFi AP* modes cannot be supported on +tiny builds.
  2. The AirRouter works but performs poorly and may sporadically reboot. Not recommended.
 
 +tiny builds are available from: <https://downloads.k3pgm.radio/afs/www/>

@@ -1,7 +1,7 @@
 {%
 /*
  * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
- * Copyright (C) 2024 Tim Wilkinson
+ * Copyright (C) 2024-2026 Tim Wilkinson
  * See Contributors file for additional contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -46,11 +46,22 @@ if (request.env.REQUEST_METHOD === "PUT") {
             configuration.setSettingAsString("dmz_mode", mode);
             if (mode >= 2) {
                 const o_lan_ip = iptoarr(configuration.getSettingAsString("dmz_lan_ip"));
-                const wifi_ip = iptoarr(configuration.getSettingAsString("wifi_ip"));
-                let wifi_shift = (wifi_ip[0] << 24) + (wifi_ip[1] << 16) + (wifi_ip[2] << 8) + wifi_ip[3];
-                wifi_shift = (wifi_shift << mode) & 0x00ffffff;
-                let dmz_lan_ip = 0x0a000001 + wifi_shift;
-                dmz_lan_ip = arrtoip([ (dmz_lan_ip >> 24) & 0xff, (dmz_lan_ip >> 16) & 0xff, (dmz_lan_ip >> 8) & 0xff, dmz_lan_ip & 0xff ]);
+                let dhcp_base;
+                let dmz_lan_ip;
+                if ("dmz_lan_ip" in request.args && match(request.args.dmz_lan_ip, constants.reIP)) {
+                    dmz_lan_ip = iptoarr(request.args.dmz_lan_ip);
+                    dmz_lan_ip[3] = (dmz_lan_ip[3] & (0xff << mode)) + 1;
+                    dhcp_base = (dmz_lan_ip[3] + 1) & 0xff;
+                    dmz_lan_ip = arrtoip(dmz_lan_ip);
+                }
+                else {
+                    const wifi_ip = iptoarr(configuration.getSettingAsString("wifi_ip"));
+                    let wifi_shift = (wifi_ip[0] << 24) + (wifi_ip[1] << 16) + (wifi_ip[2] << 8) + wifi_ip[3];
+                    wifi_shift = (wifi_shift << mode) & 0x00ffffff;
+                    dmz_lan_ip = 0x0a000001 + wifi_shift;
+                    dmz_lan_ip = arrtoip([ (dmz_lan_ip >> 24) & 0xff, (dmz_lan_ip >> 16) & 0xff, (dmz_lan_ip >> 8) & 0xff, dmz_lan_ip & 0xff ]);
+                    dhcp_base = (wifi_shift + 2) & 0xff;
+                }
                 let dmz_lan_mask = 0xffffffff << mode;
                 dmz_lan_mask = arrtoip([ (dmz_lan_mask >> 24) & 0xff, (dmz_lan_mask >> 16) & 0xff, (dmz_lan_mask >> 8) & 0xff, dmz_lan_mask & 0xff ]);
                 configuration.setSettingAsString("dmz_lan_ip", dmz_lan_ip);
@@ -61,7 +72,7 @@ if (request.env.REQUEST_METHOD === "PUT") {
                 const als = uciMesh.get("setup", "aliases", "alias");
                 if (als) {
                     const aliases = [];
-                    const dmz_dhcp_start = (wifi_shift + 2) & 0xff;
+                    const dmz_dhcp_start = dhcp_base;
                     const dmz_dhcp_end = dmz_dhcp_start + (2 << (mode - 1)) - 4;
                     const n_lan_ip = iptoarr(dmz_lan_ip);
                     for (let l = 0; l < length(als); l++) {
@@ -74,6 +85,7 @@ if (request.env.REQUEST_METHOD === "PUT") {
                     uciMesh.set("setup", "aliases", "alias", aliases);
                     uciMesh.commit("setup");
                 }
+                print(`<input hx-put="${request.env.REQUEST_URI}" id="dmz_lan_ip" name="dmz_lan_ip" type="text" size="15" required pattern="10\\.(\\d|[1-9]\\d|1[0-8]\\d|19[01])\\.(\\d|[1-9]\\d|1\\d{2}|2[0-4]\\d|25[0-5])\\.(\\d|[1-9]\\d|1\\d{2}|2[0-4]\\d|25[0-5])" value="${dmz_lan_ip}" hx-include="select[name='dhcp_mode']" hx-swap-oob='true'>`);
             }
         }
     }
@@ -163,6 +175,9 @@ if (request.env.REQUEST_METHOD === "PUT") {
             configuration.setSettingAsList("lan_intf", [ new_lan_iface ]);
         }
     }
+    if ("wan_mtu" in request.args) {
+        configuration.setSettingAsString("wan_mtu", request.args.wan_mtu);
+    }
     if ("mesh_to_local_wan" in request.args) {
         uciMesh.set("aredn", "@wan[0]", "mesh_to_local_wan", request.args.mesh_to_local_wan === "on" ? 1 : 0);
     }
@@ -172,9 +187,6 @@ if (request.env.REQUEST_METHOD === "PUT") {
     if ("lan_dhcp_route" in request.args) {
         uciMesh.set("aredn", "@wan[0]", "lan_dhcp_route", request.args.lan_dhcp_route === "on" ? 1 : 0);
     }
-    if ("lan_dhcp_44route" in request.args) {
-        uciMesh.set("aredn", "@wan[0]", "lan_dhcp_44route", request.args.lan_dhcp_44route === "on" ? 1 : 0);
-    }
     if ("lan_dhcp_defaultroute" in request.args) {
         uciMesh.set("aredn", "@wan[0]", "lan_dhcp_defaultroute", request.args.lan_dhcp_defaultroute === "on" ? 1 : 0);
     }
@@ -183,6 +195,20 @@ if (request.env.REQUEST_METHOD === "PUT") {
     }
     if ("local_defaultroute" in request.args) {
         uciMesh.set("aredn", "@wan[0]", "local_defaultroute", request.args.local_defaultroute === "on" ? 1 : 0);
+    }
+    if ("firewall" in request.args) {
+        if (request.args.firewall === "on") {
+            uciMesh.set("aredn", "@wan[0]", "passthrough", 0);
+        }
+        else {
+            uciMesh.set("aredn", "@wan[0]", "passthrough", 1);
+            uciMesh.set("aredn", "@wan[0]", "lan_dhcp_route", 1);
+            uciMesh.set("aredn", "@wan[0]", "mesh_to_local_wan", 0);
+            uciMesh.set("aredn", "@wan[0]", "local_defaultroute", 0);
+        }
+    }
+    if ("lan_radio" in request.args) {
+        uciMesh.set("aredn", "@babel[0]", "lan_radio", request.args.lan_radio === "on" ? "1" : "0");
     }
     uciMesh.commit("aredn");
     configuration.saveSettings();
@@ -204,10 +230,13 @@ const dhcp_end = (de[2] - db[2]) * 256 + (de[3] - db[3]);
 const wan_proto = configuration.getSettingAsString("wan_proto", "disabled");
 const wan_iface = split((configuration.getSettingAsList("wan_intf") || hardware.getBoardNetworkInterfaceName("wan"))[0], ".");
 const wan_vlan = wan_iface[1] ? wan_iface[1] : "";
+const wan_mtu = configuration.getSettingAsInt("wan_mtu", "");
 const lan_iface = split((configuration.getSettingAsList("lan_intf") || hardware.getBoardNetworkInterfaceName("lan"))[0], ".");
 const lan_vlan = lan_iface[1] ? lan_iface[1] : "";
 const gateway_nat = dmz_mode !== 1 ? dhcp.gateway : "172.27.0.1";
 const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
+const wan_passthrough = uciMesh.get("aredn", "@wan[0]", "passthrough") == "1";
+const dmz_lan_ip = configuration.getSettingAsString("dmz_lan_ip");
 %}
 <div class="dialog">
     {{_R("dialog-header", "Network")}}
@@ -230,7 +259,7 @@ const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
                     <div class="o">LAN Type</div>
                     <div class="m">Type and size of LAN subnet</div>
                 </div>
-                <div style="flex:0">
+                <div style="flex:0;white-space:nowrap">
                     <select style="direction:ltr;text-align-last:right" hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="dhcp_mode" {{_R("hideable-onselect")}}>
                         <option value="0" {{dmz_mode == 0 ? "selected" : ""}}>NAT</option>
                         <option value="1" {{dmz_mode == 1 ? "selected" : ""}}>44Net</option>
@@ -324,6 +353,18 @@ const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
                 </div>
                 {% } %}
             </div>
+            <div class="compact hideable2 hideable3 hideable4 hideable5">
+                <div class="cols">
+                    <div>
+                        <div class="o">IP A&zwnj;ddress</div>
+                        <div class="m">LAN IP a&zwnj;ddress</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" id="dmz_lan_ip" name="dmz_lan_ip" type="text" size="15" required pattern="10\.(\d|[1-9]\d|1[0-8]\d|19[01])\.(\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])\.(\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])" value="{{dmz_lan_ip}}" hx-include="select[name='dhcp_mode']">
+                    </div>
+                </div>
+                {{_H("The default LAN address is automatically generated. It can be overridden but may be adjusted based on the selected <b>LAN Type</b>.")}}
+            </div>
         </div>
         <hr>
         <div class="compact hideable" data-hideable='{{wan_proto === "static" ? 2 : wan_proto === "dhcp" ? 1 : 0}}'>
@@ -415,11 +456,21 @@ const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
             {% } %}
             <div class="cols">
                 <div>
+                    <div class="o">WAN MTU</div>
+                    <div class="m">Set MTU for WAN interface</div>
+                </div>
+                <div style="flex:0">
+                    <input hx-put="{{request.env.REQUEST_URI}}" name="wan_mtu" type="text" size="8" placeholder="1500" pattern="(128[0-9]|129[0-9]|1[34][0-9]{2}|1500)" hx-validate="true" value="{{wan_mtu}}">
+                </div>
+            </div>
+            {{_H("By default, the WAN has an MTU of 1500. On some networks it might be necessary to reduce this value.")}}
+            <div class="cols">
+                <div>
                     <div class="o">Mesh to WAN</div>
                     <div class="m">Allow any mesh device to use local WAN.</div>
                 </div>
                 <div style="flex:0">
-                    {{_R("switch", { name: "mesh_to_local_wan", value: uciMesh.get("aredn", "@wan[0]", "mesh_to_local_wan") !== "0" })}}
+                    {{_R("switch", { name: "mesh_to_local_wan", value: uciMesh.get("aredn", "@wan[0]", "mesh_to_local_wan") !== "0", disabled: wan_passthrough })}}
                 </div>
             </div>
             {{_H("Allow any node or device on the mesh to use our local Internet connection. This is disabled by default.")}}
@@ -429,7 +480,7 @@ const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
                     <div class="m">Allow any DtD connected node to use local WAN.</div>
                 </div>
                 <div style="flex:0">
-                    {{_R("switch", { name: "local_defaultroute", value: uciMesh.get("aredn", "@wan[0]", "local_defaultroute") !== "0" })}}
+                    {{_R("switch", { name: "local_defaultroute", value: uciMesh.get("aredn", "@wan[0]", "local_defaultroute") !== "0", disabled: wan_passthrough })}}
                 </div>
             </div>
             {{_H("If we have a WAN connection, allow locally connected (via DtD) nodes to also use it.")}}
@@ -439,7 +490,7 @@ const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
                     <div class="m">Allow any LAN device to use local WAN.</div>
                 </div>
                 <div style="flex:0">
-                    {{_R("switch", { name: "lan_dhcp_route", value: uciMesh.get("aredn", "@wan[0]", "lan_dhcp_route") !== "0" })}}
+                    {{_R("switch", { name: "lan_dhcp_route", value: uciMesh.get("aredn", "@wan[0]", "lan_dhcp_route") !== "0", disabled: wan_passthrough })}}
                 </div>
             </div>
             {{_H("Allow LAN devices connected to this node to use our Internet connection. This is enabled by default.")}}
@@ -455,16 +506,6 @@ const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
             {{_H("Allow LAN devices connected to this node to use an Internet connection made available somewhere on the Mesh.")}}
             <div class="cols">
                 <div>
-                    <div class="o">LAN to 44Net</div>
-                    <div class="m">Allow any LAN device to access AREDN specific 44Net addresses.</div>
-                </div>
-                <div style="flex:0">
-                    {{_R("switch", { name: "lan_dhcp_44route", value: uciMesh.get("aredn", "@wan[0]", "lan_dhcp_44route") !== "0" })}}
-                </div>
-            </div>
-            {{_H("Provide a 44Net route to LAN connected devices, even if your default route is disabled. This is enabled by default.")}}
-            <div class="cols">
-                <div>
                     <div class="o">LAN default route</div>
                     <div class="m">Provide LAN devices with a default route.</div>
                 </div>
@@ -474,6 +515,28 @@ const gateway_altnet = dmz_mode === 1 ? dhcp.gateway : "";
             </div>
             {{_H("Provide a default route to a LAN connected device, even if our local WAN is disabled. By default this is only provided to
             devices if our local WAN is available.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">WAN firewall</div>
+                    <div class="m">Enable the WAN firewall and NAT.</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("switch", { name: "firewall", value: uciMesh.get("aredn", "@wan[0]", "passthrough") === "0" })}}
+                </div>
+            </div>
+            {{_H("Disabling the WAN firewall and NAT allows traffic from the WAN to be routed directly to LAN devices.
+                  Disabling the firewall automatically disables other WAN features.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">LAN radio</div>
+                    <div class="m">Allow babel connections via a non-AREDN LAN radio</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("switch", { name: "lan_radio", value: uciMesh.get("aredn", "@babel[0]", "lan_radio") === "1" })}}
+                </div>
+            </div>
+            {{_H("Allows AREDN to connect to other AREDN nodes over the LAN network. This simplifies adding non-AREDN radios to extend the network.
+                Each LAN port must only be connected to a single non-AREDN radio.")}}
             <div class="cols">
                 <div>
                     <div class="o">Mesh Internet Router</div>
