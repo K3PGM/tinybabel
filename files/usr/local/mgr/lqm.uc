@@ -132,7 +132,7 @@ fs.writefile("/tmp/lqm.info", '{"trackers":{},"hidden_nodes":[]}');
 function updateMacList(device, trackers)
 {
     const mode = uci.cursor("/etc/config.mesh").get("setup", "globals", `${device.radio}_mode`);
-    if (mode !== "meshptmp" || mode !== "meshptp") {
+    if (!(mode === "meshptmp" || mode === "meshptp")) {
         return;
     }
     const f = `/var/run/hostapd-${device.wlan}.maclist`;
@@ -191,7 +191,7 @@ function deviceToType(device, mac)
     else if (substr(device, 0, 4) === "wlan") {
         return "RF";
     }
-    else if (device === "br-wifi" || device === "br-fast") {
+    else if (device === "br-wifi" || device === "br-fast" || device === "br-lan") {
         return "RRF";
     }
     else if (substr(device, 0, 2) === "wg") {
@@ -230,6 +230,8 @@ function main()
                 }
                 break;
             case "n":
+            case "900mhz":
+            case "3ghz":
                 iwSet(device, "distance auto");
                 break;
             default:
@@ -644,7 +646,7 @@ function main()
             // Ping addresses and penalize quality for excessively slow links
             if (track.ipv6ll && !track.user_blocks) {
                 let ptime = null;
-                const p = fs.popen(`${PING6} -c 1 -W ${round(ping_timeout)} -I ${track.device} ${track.ipv6ll}`);
+                const p = fs.popen(`${PING6} -c 1 -W ${round(ping_timeout)} -I ${track.device} ${track.ipv6ll} 2>/dev/null`);
                 if (p) {
                     for (let line = p.read("line"); length(line); line = p.read("line")) {
                         const m = match(trim(line), /^64 bytes from .* time=([^ \t]+) ms$/);

@@ -683,6 +683,14 @@
       "beamwidth": 23
     }
   },
+  "mikrotik routerboard sxt 5nd r2 (sxt lite5)": {
+    "maxpower": 25,
+    "antenna": {
+      "description": "16 dBi 23&deg; Panel",
+      "gain": 16,
+      "beamwidth": 23
+    }
+  },
   "mikrotik routerboard sxtsq 5hpnd (sxtsq 5 high power)": {
     "maxpower": 28,
     "antenna": {
@@ -767,6 +775,7 @@
   },
   "0xe009": {
     "name": "Ubiquiti NanoStation Loco M9",
+    "band": "900mhz",
     "maxpower": 22,
     "pwroffset": 6,
     "antenna": {
@@ -787,6 +796,7 @@
   },
   "0xe035": {
     "name": "Ubiquiti NanoStation M3",
+    "band": "3ghz",
     "maxpower": 22,
     "pwroffset": 3,
     "antenna": {
@@ -841,12 +851,14 @@
   },
   "0xe1b9": {
     "name": "Ubiquiti Rocket M9",
+    "band": "900mhz",
     "maxpower": 22,
     "pwroffset": 6,
     "antenna": "external"
   },
   "0xe1c3": {
     "name": "Ubiquiti Rocket M3",
+    "band": "3ghz",
     "maxpower": 22,
     "pwroffset": 3,
     "antenna": "external"
@@ -915,6 +927,7 @@
   },
   "0xe239": {
     "name": "Ubiquiti NanoBridge M9",
+    "band": "900mhz",
     "maxpower": 22,
     "pwroffset": 6
   },
@@ -925,6 +938,7 @@
   },
   "0xe243": {
     "name": "Ubiquiti NanoBridge M3",
+    "band": "3ghz",
     "maxpower": 22,
     "pwroffset": 3
   },
@@ -959,6 +973,29 @@
     "maxpower": 19,
     "pwroffset": 6,
     "antenna": "external"
+  },
+  "0xe2c5": {
+    "name": "Ubiquiti Bullet AC (2WA)",
+    "wlan0": {
+      "maxpower": 22,
+      "simo": true,
+      "antenna": "external"
+    },
+    "wlan1": {
+      "maxpower": 14,
+      "antenna": {
+        "description": "4 dBi Omni",
+        "gain": 4,
+        "beamwidth": 360
+      }
+    },
+    "timeouts": {
+      "reboot": [ 20, 180 ],
+      "upgrade": [ 120, 360 ]
+    },
+    "changes": {
+      "wireless": "reboot"
+    }
   },
   "0xe2d2": {
     "name": "Ubiquiti Bullet M2 Titanium HP",
@@ -1629,7 +1666,7 @@
   },
   "qemu": {
     "name": "QEMU PC",
-    "features": [ "supernode", "videoproxy", "xlink", "remoterf" ]
+    "features": [ "supernode", "videoproxy", "xlink" ]
   },
   "vmware": {
     "name": "VMware PC",
