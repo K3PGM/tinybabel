@@ -38,6 +38,7 @@ const mynode = configuration.getName();
 %}
 <div class="dialog wide">
     {{_R("tool-header", "iPerf3")}}
+    {% if (fs.stat("/usr/bin/iperf3")) { %}
     <div class="simple-tool compact client-server">
         <div class="cols">
             <div>
@@ -80,6 +81,9 @@ const mynode = configuration.getName();
             </div>
         </div>
     </div>
+    {% } else { %}
+    <div>You must install the &quot;iperf3&quot; package to enable this tool.</div>
+    {% } %}
     {{_R("tool-footer")}}
     <script>
     (function(){
