@@ -73,7 +73,7 @@ if (tracker) {
     neighbor = { name: tracker.hostname || `|${tracker.ip}`, n: tracker, l: null };
 }
 const showblock = auth.isAdmin && neighbor?.n?.type == "RF";
-const supernode = (uciMesh.get("aredn", "@supernode[0]", "enable") === "1");
+const band = hardware.getRadioCount() > 1 ? tracker?.band : null;
 %}
 <div class="dialog">
     {% if (tracker && tracker.type === "DtD" && tracker.distance < 100) { %}
@@ -97,7 +97,7 @@ const supernode = (uciMesh.get("aredn", "@supernode[0]", "enable") === "1");
             if (n.user_blocks) {
                 return "blocked by user";
             }
-            if (n.routable && n.babel_route_count > 0 && n.babel_metric != -1) {
+            if (n.routable && n.route_count > 0 && n.metric != -1) {
                 return "routing";
             }
             return "idle";
@@ -165,7 +165,7 @@ const supernode = (uciMesh.get("aredn", "@supernode[0]", "enable") === "1");
             </div>
             <div class="cols">
                 <div class="i">
-                    <div>{{n.type}}</div>
+                    <div>{{n.type}}{{n.remoterf ? "+RF" : ""}}{{band ? ` (${band})`: ""}}</div>
                     <div>type</div>
                 </div>
                 <div class="i">
@@ -173,7 +173,13 @@ const supernode = (uciMesh.get("aredn", "@supernode[0]", "enable") === "1");
                     <div>mac address</div>
                 </div>
                 <div class="i">
-                    <div>{{n.ip ? `<a href="http://${n.ip}/">${n.ip}</a>` : "-"}}</div>
+                    <div>{% if (n.ip && !match(n.ip, /^169\.254\./)) { %}
+                    <a href="http://{{n.ip}}/">{{n.ip}}</a>
+                    {% } else if (n.canonical_ip) { %}
+                    <a href="http://{{n.canonical_ip}}/">{{n.canonical_ip}}</a>
+                    {% } else { %}
+                    -
+                    {% } %}</div>
                     <div>ip address</div>
                 </div>
             </div>
@@ -325,11 +331,11 @@ const supernode = (uciMesh.get("aredn", "@supernode[0]", "enable") === "1");
                     <div>state</div>
                 </div>
                 <div class="i">
-                    <div>{{n.babel_route_count}}</div>
+                    <div>{{n.route_count}}</div>
                     <div>routes</div>
                 </div>
                 <div class="i">
-                    <div>{{n.babel_route_count === 0 ? "-" : n.babel_metric ?? "-"}}</div>
+                    <div>{{n.route_count === 0 ? "-" : n.metric ?? "-"}}</div>
                     <div>metric</div>
                 </div>
             </div>

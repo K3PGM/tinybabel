@@ -33,7 +33,7 @@
 
 const refresh_timeout_base = 12 * 60; // refresh high cost data every 12 minutes
 const refresh_timeout_range = 5 * 60; // to 12 + 5 minutes
-const refresh_retry_timeout = 5 * 60;
+const refresh_retry_timeout = 1 * 60;
 const lastseen_timeout = 24 * 60 * 60; // age out nodes we've not seen for 24 hours
 const snr_run_avg = 0.4; // snr running average
 const tx_quality_run_avg = 0.4; // tx quality running average
@@ -53,13 +53,21 @@ const lastup_margin = 120; // Seconds before link is considered down
 const IW = "/usr/sbin/iw";
 const UFETCH = "/bin/uclient-fetch";
 const PING6 = "/bin/ping6";
+const BRCTL = "/usr/sbin/brctl";
 
 // Get radio
-const device = radios.getMeshRadio();
-const wlan = device ? device.iface : "none";
-const phy = device ? hardware.getPhyDevice(wlan) : "none";
-const radio = device ? hardware.getRadioDevice(wlan) : "none";
-const devtype = hardware.getRadioType(wlan);
+const devices = [];
+const mradios = radios.getMeshRadios();
+for (let i = 0; i < length(mradios); i++) {
+    const iface = mradios[i].iface;
+    push(devices, {
+        wlan: iface,
+        phy: hardware.getPhyDevice(iface),
+        radio: hardware.getRadioDevice(iface),
+        type: hardware.getRadioType(iface),
+        mode: uci.cursor("/etc/config.mesh").get("setup", "globals", `${hardware.getRadioDevice(iface)}_mode`)
+    });
+}
 
 let config = {};
 
@@ -108,54 +116,49 @@ function canonicalHostname(hostname)
     return lc(replace(replace(replace(replace(replace(replace(hostname, /^dtdlink\./, ""), /^xlink\d+\./, ""), /^xlink\d+\./, ""), /^lan\./, ""), /^supernode\./, ""), /\.local\.mesh$/, ""));
 }
 
-function iwSet(cmd)
+function iwSet(device, cmd)
 {
-    if (phy !== "none") {
-        system(`${IW} ${phy} set ${cmd} > /dev/null 2>&1`);
-    }
+    system(`${IW} ${device.phy} set ${cmd} > /dev/null 2>&1`);
 }
 
 const myhostname = canonicalHostname(configuration.getName());
-const myip = uci.cursor().get("network", "wifi", "ipaddr");
+const myip = configuration.getIP();
 const mylanip = uci.cursor().get("network", "lan", "ipaddr");
 const issupernode = uci.cursor().get("aredn", "@supernode[0]", "enable") == "1";
 
 // Clear old data
 fs.writefile("/tmp/lqm.info", '{"trackers":{},"hidden_nodes":[]}');
 
-function updateAllowList()
+function updateMacList(device, trackers)
 {
-    const f = `/var/run/hostapd-${wlan}.maclist`;
+    const mode = uci.cursor("/etc/config.mesh").get("setup", "globals", `${device.radio}_mode`);
+    if (mode !== "meshptmp" || mode !== "meshptp") {
+        return;
+    }
+    const f = `/var/run/hostapd-${device.wlan}.maclist`;
     const o = fs.readfile(f);
     if (o === null) {
         return false;
     }
     let n = "";
-    const peer = uci.cursor("/etc/config.mesh").get("setup", "globals", `${radio}_peer`);
-    if (peer) {
-        n = `${peer}\n`;
-    }
-    if (o == n) {
-        return false;
-    }
-    fs.writefile(f, n);
-    system("/usr/bin/killall -HUP hostapd");
-    return true;
-}
-
-function updateDenyList(trackers)
-{
-    const f = `/var/run/hostapd-${wlan}.maclist`;
-    const o = fs.readfile(f);
-    if (o === null) {
-        return false;
-    }
-    let n = "";
-    for (let mac in trackers) {
-        if (trackers[mac].user_blocks) {
-            n += `${mac}\n`;
+    if (mode == "meshptp") {
+        // In PtP mode we allow a single mac address.
+        // Update this every time in case the file gets overwritten (which happens when
+        // hostapd gets restarted)
+        const peer = uci.cursor("/etc/config.mesh").get("setup", "globals", `${device.radio}_peer`);
+        if (peer) {
+            n = `${peer}\n`;
         }
     }
+    else {
+        // Update denied mac list
+        for (let mac in trackers) {
+            if (trackers[mac].user_blocks) {
+                n += `${mac}\n`;
+            }
+        }
+    }
+    // ...
     if (o == n) {
         return false;
     }
@@ -178,24 +181,26 @@ function reachToLQ(reach)
 }
 
 let xlinks = {};
+let rwifi = {};
 
-function deviceToType(device)
+function deviceToType(device, mac)
 {
     if (device == "br-dtdlink") {
         return "DtD";
     }
-    else if (device === "br-wifi" || match(device, /^wlan/)) {
+    else if (substr(device, 0, 4) === "wlan") {
         return "RF";
     }
-    else if (match(device, /^wg/)) {
+    else if (device === "br-wifi" || device === "br-fast") {
+        return "RRF";
+    }
+    else if (substr(device, 0, 2) === "wg") {
         return "Wireguard";
     }
     else if (xlinks[device]) {
         return "Xlink";
     }
-    else {
-        return null;
-    }
+    return null;
 }
 
 function main()
@@ -203,49 +208,40 @@ function main()
     const trackers = {};
     let rfLinks = {};
     let hiddenNodes = {};
-    let lastDistance = -1;
-    let lastReadDistance = -1;
-    let distance = -1;
+    let distances = null;
     let noise = -95;
     let now = 0;
     let previousnow = 0;
-    const radioMode = device ? uci.cursor("/etc/config.mesh").get("setup", "globals", `${radio}_mode`) : "off";
     const start = clock(true)[0];
 
     updateConfig();
 
-    // We dont know any distances yet
-    switch (devtype) {
-        case "halow":
-        case "ax":
-        case "ac":
-            lastDistance = config.max_distance;
-            if (hardware.supportsFeature("max-distance", wlan)) {
-                lastReadDistance = hardware.setMaxDistance(wlan, lastDistance);
-            }
-            break;
-        case "n":
-            iwSet("distance auto");
-            break;
-        default:
-            break;
-    }
-    // Or any hidden nodes
-    iwSet("rts off");
-    // Set the default retries
-    iwSet(`retry short ${default_short_retries} long ${default_long_retries}`);
-    // Setup mac filters
-    if (radioMode == "meshptp") {
-        // In PtP mode we allow a single mac address
-        updateAllowList();
-    }
-    else {
-        // Clear the deny list
-        updateDenyList({});
-    }
-
-    // This file allows the main loop to restart
-    fs.unlink("/tmp/lqm.reset");
+    map(devices, device => {
+        // We dont know any distances yet
+        device.lastDistance = -1;
+        device.lastReadDistance = -1;
+        switch (device.type) {
+            case "halow":
+            case "ax":
+            case "ac":
+                device.lastDistance = config.max_distance;
+                if (hardware.supportsFeature("max-distance", device.wlan)) {
+                    device.lastReadDistance = hardware.setMaxDistance(device.wlan, device.lastDistance);
+                }
+                break;
+            case "n":
+                iwSet(device, "distance auto");
+                break;
+            default:
+                break;
+        }
+        // Or any hidden nodes
+        iwSet(device, "rts off");
+        // Set the default retries
+        iwSet(device, `retry short ${default_short_retries} long ${default_long_retries}`);
+        // Setup mac filters
+        updateMacList(device, {});
+    });
 
     // Main loop
     function tick()
@@ -258,19 +254,21 @@ function main()
         const cursorm = uci.cursor("/etc/config.mesh");
         let refresh = false;
 
-        // If the channel bandwidth is less than 20, we need to adjust what we report as the values.
-        // NOTE. THE nl80211 api report bitrates x10 so we need to reduce this by 10 here.
-        const chanbw = int(cursor.get("wireless", radio, "chanbw") || "20");
-        const channelBwScale = (devtype === "halow" ? 1 : min(20, chanbw)) / 200.0;
-
         const lat = cursor.get("aredn", "@location[0]", "lat") ? 1 * cursor.get("aredn", "@location[0]", "lat") : null;
         const lon = cursor.get("aredn", "@location[0]", "lon") ? 1 * cursor.get("aredn", "@location[0]", "lon") : null;
 
-        // Update xlinks
+        // Update xlinks and remote wifi
         xlinks = {};
-        cursorm.foreach("xlink", "interface", section => {
-            if (section.ifname) {
+        rwifi = {};
+        cursor.foreach("network", "interface", section => {
+            const name = section[".name"];
+            if (substr(name, 0, 5) === "xlink") {
                 xlinks[section.ifname] = true;
+            }
+        });
+        cursor.foreach("network", "bridge-vlan", section => {
+            if (substr(name, 0, 3) === "rrf") {
+                rwifi[section.vlan] = true;
             }
         });
 
@@ -280,34 +278,44 @@ function main()
             for (let line = p.read("line"); length(line); line = p.read("line")) {
                 const m = match(line, /^add.*address ([^ \t]+) if ([^ \t]+) reach ([^ \t]+) .* rxcost ([^ \t]+) txcost ([^ \t]+)/);
                 if (m) {
-                    const type = deviceToType(m[2]);
                     const mac = network.ipv6ll2mac(m[1]);
-                    let track = trackers[mac];
-                    if (!track && type) {
-                        track = {
-                            lastseen: now,
-                            lastup: now,
-                            type: type,
-                            device: m[2],
-                            mac: mac,
-                            ipv6ll: m[1],
-                            refresh: 0,
-                            avg_lq: 100
-                        };
-                        if (type === "RF") {
-                            track.mode = radioMode;
+                    const type = deviceToType(m[2], mac);
+                    if (type) {
+                        let track = trackers[mac];
+                        if (!track) {
+                            track = {
+                                lastseen: now,
+                                lastup: now,
+                                type: type,
+                                device: m[2],
+                                mac: mac,
+                                ipv6ll: m[1],
+                                refresh: 0,
+                                avg_lq: 100
+                            };
+                            if (type === "Wireguard") {
+                                // The mac address can change, so for tunnels we make sure the device is unique
+                                const device = track.device;
+                                for (let m in trackers) {
+                                    if (trackers[m].device === device) {
+                                        delete trackers[m];
+                                    }
+                                }
+                            }
+                            trackers[mac] = track;
                         }
-                        trackers[mac] = track;
-                    }
-                    if (track) {
-                        track.lq = reachToLQ(m[3]);
-                        track.rxcost = int(m[4]);
-                        track.txcost = int(m[5]);
-                        const rtt = match(line, /rtt ([^ \t]+)/);
-                        if (rtt) {
-                            track.rtt = int(rtt[1]);
+                        else {
+                            track.type = type;
+                            track.device = m[2];
+                            track.lq = reachToLQ(m[3]);
+                            track.rxcost = int(m[4]);
+                            track.txcost = int(m[5]);
+                            const rtt = match(line, /rtt ([^ \t]+)/);
+                            if (rtt) {
+                                track.rtt = int(rtt[1]);
+                            }
+                            track.avg_lq = min(100, 0.9 * track.avg_lq + 0.1 * track.lq);
                         }
-                        track.avg_lq = min(100, 0.9 * track.avg_lq + 0.1 * track.lq);
                     }
                 }
             }
@@ -316,10 +324,10 @@ function main()
 
         // Update stats for tunnels and xlinks
         const activeDevices = {};
-        const istats = rtnl.request(rtnl.const.RTM_GETLINK, rtnl.const.NLM_F_DUMP, {});
+        const istats = hardware.getNetworkInterfaces();
         for (let i = 0; i < length(istats); i++) {
             const stat = istats[i];
-            const type = deviceToType(stat.dev);
+            const type = deviceToType(stat.dev, null);
             if (type === "Wireguard" || type == "Xlink") {
                 for (let mac in trackers) {
                     const t = trackers[mac];
@@ -345,36 +353,47 @@ function main()
         }
 
         // Update stats for radios
-        if (wlan !== "none") {
-            const cnoise = hardware.getRadioNoise(wlan);
+        map(devices, device => {
+            const cnoise = hardware.getRadioNoise(device.wlan);
             if (cnoise < -70) {
                 noise = round(noise * noise_run_avg + cnoise * (1 - noise_run_avg));
             }
-            const stations = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: wlan });
-            for (let i = 0; i < length(stations); i++) {
-                const station = stations[i];
-                const track = trackers[station.mac];
-                if (track) {
-                    track.signal = station.sta_info.signal;
-                    track.tx_packets = station.sta_info.tx_packets;
-                    track.tx_retries = station.sta_info.tx_retries;
-                    track.tx_fail = station.sta_info.tx_failed;
-                    if (station.sta_info.tx_bitrate) {
-                        track.tx_bitrate = station.sta_info.tx_bitrate.bitrate * channelBwScale;
+            // If the channel bandwidth is less than 20, we need to adjust what we report as the values.
+            // NOTE. THE nl80211 api report bitrates x10 so we need to reduce this by 10 here.
+            const chanbw = int(cursor.get("wireless", device.radio, "chanbw") || "20");
+            const channelBwScale = (device.type === "halow" ? 1 : min(20, chanbw)) / 200.0;
+            const wlans = [ device.wlan, ...map(fs.glob(`/sys/class/net/${device.wlan}.sta*`), w => fs.basename(w)) ];
+            const band = hardware.getDefaultChannel(device.wlan)?.band;
+            for (let w = 0; w < length(wlans); w++) {
+                const stations = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: wlans[w] });
+                for (let i = 0; i < length(stations); i++) {
+                    const station = stations[i];
+                    const track = trackers[station.mac] || trackers[replace(station.mac, /^..:/, "fe:")];
+                    if (track) {
+                        track.type = "RF";
+                        track.subdevice = wlans[w];
+                        track.band = band;
+                        track.signal = station.sta_info.signal;
+                        track.tx_packets = station.sta_info.tx_packets;
+                        track.tx_retries = station.sta_info.tx_retries;
+                        track.tx_fail = station.sta_info.tx_failed;
+                        if (station.sta_info.tx_bitrate) {
+                            track.tx_bitrate = station.sta_info.tx_bitrate.bitrate * channelBwScale;
+                        }
+                        if (station.sta_info.rx_bitrate) {
+                            track.rx_bitrate = station.sta_info.rx_bitrate.bitrate * channelBwScale;
+                        }
+                        if (track.snr !== null) {
+                            track.snr = max(0, round(track.snr * snr_run_avg + (track.signal - noise) * (1 - snr_run_avg)));
+                        }
+                        else {
+                            track.snr = max(0, track.signal - noise);
+                        }
+                        track.connected_time = station.sta_info.connected_time;
                     }
-                    if (station.sta_info.rx_bitrate) {
-                        track.rx_bitrate = station.sta_info.rx_bitrate.bitrate * channelBwScale;
-                    }
-                    if (track.snr !== null) {
-                        track.snr = max(0, round(track.snr * snr_run_avg + (track.signal - noise) * (1 - snr_run_avg)));
-                    }
-                    else {
-                        track.snr = max(0, track.signal - noise);
-                    }
-                    track.connected_time = station.sta_info.connected_time;
                 }
             }
-        }
+        });
 
         // Update running averages
         for (let mac in trackers) {
@@ -435,8 +454,10 @@ function main()
         let finish;
 
         // Max RF distance
-        distance = -1;
+        distances = {};
         const ip2tracker = {};
+        const dev2tracker = {};
+        const dtdips = {};
 
         // Refresh remote attributes periodically as this is expensive
         // We dont do it the very first time so we can populate the LQM state with a new node quickly
@@ -453,10 +474,10 @@ function main()
             const track = trackerlist[tidx];
             if (track.refresh === 0) {
                 refresh = true;
-                track.refresh = now;
+                track.refresh = now - 1;
             }
             else if (now > track.refresh && track.ipv6ll) {
-                const p = fs.popen(`${UFETCH} -T ${connect_timeout} "http://[${track.ipv6ll}%${track.device}]:8080/cgi-bin/sysinfo.json?lqm=1" -O - 2> /dev/null`);
+                const p = fs.popen(`${UFETCH} -T ${connect_timeout} "http://[${track.ipv6ll}%${track.device}]/a/sysinfo?lqm=1" -O - 2> /dev/null`);
                 if (p) {
                     let info = null;
                     try {
@@ -474,30 +495,19 @@ function main()
                         track.rev_ping_success_time = null;
                         track.rev_ping_quality = null;
                         track.rev_quality = null;
+                        track.meshvlan = null;
                     }
                     else {
                         track.refresh = now + refreshTimeout();
                         track.rev_lastseen = now;
 
                         track.hostname = canonicalHostname(info.node);
-                        track.canonical_ip = network.getIPAddressFromHostname(track.hostname);
-                        if (track.type === "Wireguard") {
-                            const address = cursor.get("network", track.device, "addresses")[0];
-                            const m = match(address, /^(\d+\.\d+\.\d+\.)(\d+)$/);
-                            if (match(track.device, /^wgs/)) {
-                                track.ip = `${m[1]}${int(m[2]) - 1}`;
-                            }
-                            else {
-                                track.ip = `${m[1]}${int(m[2]) + 1}`
-                            }
-                        }
-                        else {
-                            for (let i = 0; i < length(info.interfaces); i++) {
-                                const iface = info.interfaces[i];
-                                if (iface.mac && lc(iface.mac) === track.mac && iface.ip) {
-                                    track.ip = iface.ip;
-                                    break;
-                                }
+                        track.canonical_ip = info.ip || network.getIPAddressFromHostname(track.hostname);
+                        for (let i = 0; i < length(info.interfaces); i++) {
+                            const iface = info.interfaces[i];
+                            if (iface.mac && lc(iface.mac) === track.mac && iface.ip) {
+                                track.ip = iface.ip;
+                                break;
                             }
                         }
 
@@ -524,11 +534,17 @@ function main()
                             track.firmware_version = info.node_details.firmware_version;
                         }
 
+                        // Track mesh vlan
+                        track.meshvlan = null;
+                        if (track.type === "DtD" && info.meshvlan) {
+                            track.meshvlan = info.meshvlan;
+                        }
+
                         if (info.lqm && info.lqm.info && info.lqm.info.trackers) {
                             const rtrackers = info.lqm.info.trackers;
                             for (let mac in rtrackers) {
                                 const rtrack = rtrackers[mac];
-                                if (myhostname == canonicalHostname(rtrack.hostname)) {
+                                if (track.type === rtrack.type && myhostname === canonicalHostname(rtrack.hostname)) {
                                     track.rev_lq = rtrack.lq;
                                     track.rev_ping_success_time = rtrack.ping_success_time;
                                     track.rev_ping_quality = rtrack.ping_quality;
@@ -543,13 +559,13 @@ function main()
                                     const rtrack = rtrackers[mac];
                                     if (rtrack.type === "RF" || !rtrack.type) {
                                         const rhostname = canonicalHostname(rtrack.hostname);
-                                        if (rtrack.ip && rtrack.routable) {
-                                            rfLinks[track.mac][rtrack.ip] = {
-                                                ip: rtrack.ip,
+                                        if (rtrack.canonical_ip && rtrack.routable) {
+                                            rfLinks[track.mac][rtrack.canonical_ip] = {
+                                                ip: rtrack.canonical_ip,
                                                 hostname: rhostname,
                                             };
                                             if (track.lat && rtrack.lon && lat && lon) {
-                                                rfLinks[track.mac][rtrack.ip].distance = calcDistance(lat, lon, 1 * rtrack.lat, 1 * rtrack.lon);
+                                                rfLinks[track.mac][rtrack.canonical_ip].distance = calcDistance(lat, lon, 1 * rtrack.lat, 1 * rtrack.lon);
                                             }
                                         }
                                         if (myhostname == rhostname) {
@@ -581,12 +597,18 @@ function main()
             const track = trackerlist[tidx];
             
             // Clear route counter
-            track.babel_route_count = 0;
-            track.babel_metric = null;
+            track.route_count = 0;
+            track.metric = null;
             track.routable = false;
 
             if (track.ip || track.canonical_ip) {
                 ip2tracker[track.ip || track.canonical_ip] = track;
+            }
+            if (track.type === "DtD" && track.canonical_ip) {
+                dtdips[track.canonical_ip] = true;
+            }
+            if (track.type === "Wireguard" && track.device) {
+                dev2tracker[track.device] = track;
             }
 
             // Refresh user blocks
@@ -600,19 +622,23 @@ function main()
                 }
             }
 
+            // Track remote wifis
+            track.remoterf = rwifi[track.meshvlan] ? true : false;
+
             // Include babel info for this link
-            track.babel_config = {
-                hello_interval: int(cursor.get("babel", "default", "hello_interval")),
-                update_interval: int(cursor.get("babel", "default", "update_interval"))
-            };
             if (track.type === "Wireguard") {
-                track.babel_config.rxcost = int(cursor.get("wireguard", "@network[0]", "cost") || cursor.get("babel", "tunnel", "rxcost") || 300);
-            }
-            else if (track.type === "Xlink") {
-                track.babel_config.rxcost = int(cursor.get("babel", "xlink", "rxcost"));
+                if (issupernode) {
+                    track.hello_interval = int(cursor.get("babel", "supernode", "hello_interval"));
+                    track.update_interval = int(cursor.get("babel", "supernode", "update_interval"));
+                }
+                else {
+                    track.hello_interval = int(cursor.get("babel", "tunnel", "hello_interval"));
+                    track.update_interval = int(cursor.get("babel", "tunnel", "update_interval"));
+                }
             }
             else {
-                track.babel_config.rxcost = int(cursor.get("babel", "default", "rxcost"));
+                track.hello_interval = int(cursor.get("babel", "default", "hello_interval"));
+                track.update_interval = int(cursor.get("babel", "default", "update_interval"));
             }
 
             // Ping addresses and penalize quality for excessively slow links
@@ -666,12 +692,13 @@ function main()
             }
 
             // Calculate the max RF distance as we go
-            if (track.type == "RF" && track.lastseen >= now) {
+            if (track.type == "RF" && track.lastseen >= now && track.subdevice) {
+                const device = split(track.subdevice, ".")[0];
                 if (track.distance === null) {
-                    distance = config.max_distance
+                    distances[device] = config.max_distance
                 }
-                else if (!track.user_blocks && track.distance > distance) {
-                    distance = track.distance;
+                else if (!track.user_blocks && track.distance > (distances[device] ?? -1)) {
+                    distances[device] = track.distance;
                 }
             }
 
@@ -685,30 +712,30 @@ function main()
             total_route_count = 0;
             for (let i = 0; i < length(hostRoutes); i++) {
                 const r = hostRoutes[i];
-                const t = ip2tracker[r.gateway];
+                const t = ip2tracker[r.gateway] || dev2tracker[r.oif];
                 if (t) {
                     t.routable = true;
-                    t.babel_route_count++;
-                    if (t.babel_metric === null || r.metric < t.babel_metric) {
-                        t.babel_metric = r.metric;
+                    t.route_count++;
+                    if (t.metric === null || r.metric < t.metric) {
+                        t.metric = r.metric;
                     }
                     total_route_count++;
                 }
             }
             if (superRoute) {
-                const t = ip2tracker[superRoute.gateway];
+                const t = ip2tracker[superRoute.gateway] || dev2tracker[superRoute.oif];
                 if (t) {
                     t.routable = true;
-                    t.babel_route_count++;
-                    if (t.babel_metric === null || superRoute.metric < t.babel_metric) {
-                        t.babel_metric = superRoute.metric;
+                    t.route_count++;
+                    if (t.metric === null || superRoute.metric < t.metric) {
+                        t.metric = superRoute.metric;
                     }
                     total_route_count++;
                 }
             }
 
-            // Remove any trackers which are too old or if they disconnect when first seen
             for (let mac in trackers) {
+                // Remove any trackers which are too old or if they disconnect when first seen
                 const track = trackers[mac];
                 // *DONT* remove any user blocked trackers. If we block these devices at a low level (via
                 // the deny list for example) then we never see them again at this level and we loose the ability
@@ -718,32 +745,29 @@ function main()
                         delete trackers[mac];
                     }
                 }
-            }
-
-            if (radioMode == "meshptp") {
-                // In PtP mode we allow a single mac address.
-                // Update this every time in case the file gets overwritten (which happens when
-                // hostapd gets restarted)
-                updateAllowList();
-            }
-            else {
-                // Update denied mac list
-                updateDenyList(trackers);
-            }
-
-            // Update the wifi distance
-            if (distance < 0) {
-                distance = config.max_distance;
-            }
-            else {
-                distance = min(distance, config.max_distance);
-            }
-            if (hardware.supportsFeature("max-distance", wlan)) {
-                if (distance != lastDistance || lastReadDistance != hardware.getMaxDistance(wlan)) {
-                    lastDistance = distance;
-                    lastReadDistance = hardware.setMaxDistance(wlan, distance);
+                // Also mark any RRF types which have DtD equivalents
+                if (track.type === "RRF" && dtdips[track.canonical_ip]) {
+                    track.type = "LRF";
                 }
             }
+
+            map(devices, device => {
+                updateMacList(device, trackers);
+
+                // Update the wifi distances
+                let distance = distances[device.wlan];
+                if (distance === null) {
+                    distance = config.max_distance;
+                }
+                else {
+                    distance = min(distance, config.max_distance);
+                }
+                if (hardware.supportsFeature("max-distance", device.wlan) && (distance != device.lastDistance || device.lastReadDistance != hardware.getMaxDistance(device.wlan))) {
+                    device.lastDistance = distance;
+                    device.lastReadDistance = hardware.setMaxDistance(device.wlan, distance);
+                }
+                distances[device.wlan] = distance;
+            });
 
             // Set the RTS/CTS state depending on whether everyone can see everyone
             // Build a list of all the nodes our neighbors can see
@@ -760,22 +784,22 @@ function main()
             // Remove all the nodes we can see from this set
             for (let mac in trackers) {
                 const track = trackers[mac];
-                if (track.ip) {
-                    delete theres[track.ip];
+                if (track.canonical_ip) {
+                    delete theres[track.canonical_ip];
                 }
             }
             // Including ourself
             delete theres[myip];
-            delete theres[mylanip];
 
             // If there are any nodes left, then our neighbors can see hidden nodes we cant. Enable RTS/CTS
+            // We do this rather crudely on all radios regardless of which ones actually have the hidden nodes.
             const hidden = values(theres);
             if ((length(hidden) == 0) != (length(hiddenNodes) == 0)) {
                 if (length(hidden) > 0) {
-                    iwSet(`rts ${rts_threshold}`);
+                    map(devices, device => iwSet(device, `rts ${rts_threshold}`));
                 }
                 else {
-                    iwSet("rts off");
+                    map(devices, device => iwSet(device, "rts off"));
                 }
             }
             hiddenNodes = hidden;
@@ -785,14 +809,10 @@ function main()
                 start: start,
                 now: now,
                 trackers: trackers,
-                distance: distance,
+                distances: distances,
                 hidden_nodes: hiddenNodes,
                 total_route_count: total_route_count
             }));
-            if (fs.access("/tmp/lqm.reset")) {
-                fs.unlink("/tmp/lqm.reset");
-                return waitForTicks(0, main);
-            }
 
             // Last time we ran
             previousnow = now;

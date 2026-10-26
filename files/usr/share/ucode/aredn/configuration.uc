@@ -76,9 +76,6 @@ const configFiles = [
     "/etc/arednlink/subscribe",
     "/etc/local/uci/hsmmmesh",
     "/etc/aredn_include/babel-deny.conf",
-    "/etc/aredn_include/dtdlink.network.user",
-    "/etc/aredn_include/lan.network.user",
-    "/etc/aredn_include/wan.network.user",
     "/etc/dropbear/authorized_keys",
     "/tmp/newpassword"
 ];
@@ -118,20 +115,44 @@ export function getSettingAsString(key, def)
 export function getSettingAsInt(key, def)
 {
     initSetup();
-    const v = int(scursor.get("setup", "globals", key));
-    if (type(v) === "int") {
+    const v = scursor.get("setup", "globals", key);
+    if (int(v) == v) {
         return v;
     }
     return def;
 };
 
-export function setSetting(key, value, def)
+export function getSettingAsList(key, def)
+{
+    initSetup();
+    return scursor.get("setup", "globals", key) || def;
+};
+
+export function setSettingAsString(key, value, def)
 {
     initSetup();
     const o = scursor.get("setup", "globals", key);
     const n = replace(`${value ?? def ?? ""}`, /[\r\n]/g, " ");
     if (o !== n) {
         scursor.set("setup", "globals", key, n);
+        setupChanged = true;
+        return true;
+    }
+    return false;
+};
+
+export function setSettingAsList(key, value, def)
+{
+    initSetup();
+    const o = scursor.get("setup", "globals", key) ?? "";
+    if (type(value) !== "array") {
+        value = type(def) === "array" ? def : [];
+    }
+    if (length(value) === 0) {
+        value = "";
+    }
+    if (sprintf("%$J", o) !== sprintf("%J", value)) {
+        scursor.set("setup", "globals", key, value);
         setupChanged = true;
         return true;
     }
@@ -190,6 +211,11 @@ export function getDefaultIP()
     else {
         return "192.168.1.1";
     }
+};
+
+export function getIP()
+{
+    return uci.cursor().get("network", "mesh", "ipaddr");
 };
 
 export function setPassword(passwd)
@@ -254,6 +280,16 @@ export function getDHCP(mode)
     }
 };
 
+export function getActiveNetworkInterfaceNames(net)
+{
+    initSetup();
+    const ports = scursor.get("setup", "globals", `${net}_intf`);
+    if (ports) {
+        return ports;
+    }
+    return hardware.getBoardNetworkInterfaceName(net);
+};
+
 function copyConfig(configRoot)
 {
     fs.mkdir(configRoot);
@@ -296,7 +332,7 @@ function revertConfig(configRoot)
         for (let i = length(configDirs) - 1; i >= 0; i--) {
             fs.rmdir(`${configRoot}${configDirs[i]}`);
         }
-        fs.rmdir(currentConfig);
+        fs.rmdir(configRoot);
     }
 };
 
@@ -367,16 +403,6 @@ export function commitChanges()
     return status;
 };
 
-export function revertChanges()
-{
-    revertConfig(currentConfig);
-};
-
-export function revertModalChanges()
-{
-    revertConfig(modalConfig);
-};
-
 export function countChanges()
 {
     let count = 0;
@@ -386,6 +412,20 @@ export function countChanges()
         }
     }
     return count;
+};
+
+export function revertChanges()
+{
+    revertConfig(currentConfig);
+    removeConfig(modalConfig);
+};
+
+export function revertModalChanges()
+{
+    revertConfig(modalConfig);
+    if (countChanges() === 0) {
+        removeConfig(currentConfig);
+    }
 };
 
 // The order of these is important
@@ -489,13 +529,11 @@ export function restoreTunnels(tunnelBackupFilename)
 
 export function supportdata(supportdatafilename)
 {
-    const c = uci.cursor();
-
     const wifiiface0 = fs.access("/sys/class/net/wlan0") ? "wlan0" : null;
     const wifiiface1 = fs.access("/sys/class/net/wlan1") ? "wlan1" : null;
     let doscan0 = false;
     let doscan1 = false;
-    c.foreach("wireless", "wifi-iface", function(s)
+    uci.cursor().foreach("wireless", "wifi-iface", function(s)
     {
         if (s.ifname == wifiiface0 && s.mode === "adhoc") {
             doscan0 = true;
@@ -525,8 +563,6 @@ export function supportdata(supportdatafilename)
         "/tmp/service-validation-state.json",
         "/tmp/sysinfo",
         "/tmp/dhcp.leases",
-        "/sys/kernel/debug/ieee80211/phy0/ath9k/ack_to",
-        "/sys/kernel/debug/ieee80211/phy1/ath9k/ack_to",
         "/proc/net/nf_conntrack",
         "/var/etc/babel-active.conf",
         "/var/run/hostapd-wlan0.maclist",
@@ -577,7 +613,6 @@ export function supportdata(supportdatafilename)
         "babel-dump",
         "/usr/local/bin/arednlink-dump",
         "ls -l /var/run/arednlink/*/*",
-        "echo /all | nc 127.0.0.1 2006",
         "opkg list-installed",
         "ps -w",
         "/usr/local/bin/get_hardwaretype",

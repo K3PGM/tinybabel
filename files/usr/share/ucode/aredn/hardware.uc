@@ -74,6 +74,10 @@ export function getBoard()
             boardJson.model.id = "vultr";
             boardJson.model.name = "Vultr";
         }
+        else if (fs.access("/sys/class/dmi/id")) {
+            boardJson.model.id = "pc";
+            boardJson.model.name = "PC";
+        }
     }
     return boardJson;
 };
@@ -84,12 +88,7 @@ export function getBoardModel()
     if (model) {
         return model;
     }
-    switch (ubus.connect().call("system", "board", {}).release.target) {
-        case "x86/64":
-            return { id: "pc", name: "pc" };
-        default:
-            return { id: "unknown", name: "unknown" };
-    }
+    return { id: "unknown", name: "unknown" };
 };
 
 export function getBoardId()
@@ -207,16 +206,16 @@ export function getBoardNetworkInterfaceName(type)
     const network = board.network && board.network[type];
     if (network) {
         if (network.ifname) {
-            return network.ifname;
+            return [ network.ifname ];
         }
         if (network.device) {
-            return network.device;
+            return [ network.device ];
         }
         if (network.ports) {
-            return join(" ", network.ports);
+            return network.ports;
         }
     }
-    return "";
+    return null;
 };
 
 function getChannelFromRadioFrequency(radio, freq)
@@ -305,15 +304,17 @@ function getWiFiChannels(wifiIface)
     const exclude = radio.exclude_channels;
     for (let i = 0; i < length(freqs); i++) {
         const f = freqs[i];
-        const freq = freq_adjust(f);
-        if (freq >= freq_min && freq <= freq_max) {
-            const num = getChannelFromRadioFrequency(radio, freq);
-            if (!exclude || index(exclude, num) === -1) {
-                push(channels, {
-                    label: num != freq ? num + " (" + freq + ")" : "" + freq,
-                    number: num,
-                    frequency: freq
-                });
+        if (!f.disabled) {
+            const freq = freq_adjust(f);
+            if (freq >= freq_min && freq <= freq_max) {
+                const num = getChannelFromRadioFrequency(radio, freq);
+                if (!exclude || index(exclude, num) === -1) {
+                    push(channels, {
+                        label: num != freq ? num + " (" + freq + ")" : "" + freq,
+                        number: num,
+                        frequency: freq
+                    });
+                }
             }
         }
     }
@@ -755,9 +756,29 @@ export function getHTMode(wifiIface, bandwidth, mode)
     return htmode;
 };
 
+export function getNetworkInterfaces()
+{
+    let ifs = rtnl.request(rtnl.const.RTM_GETLINK, rtnl.const.NLM_F_DUMP, {});
+    if (!ifs) {
+        rtnl.close();
+        ifs = rtnl.request(rtnl.const.RTM_GETLINK, rtnl.const.NLM_F_DUMP, {});
+    }
+    return ifs;
+};
+
+export function getNetworkInterfaceAddresses()
+{
+    let ifs = rtnl.request(rtnl.const.RTM_GETADDR, rtnl.const.NLM_F_DUMP, {});
+    if (!ifs) {
+        rtnl.close();
+        ifs = rtnl.request(rtnl.const.RTM_GETADDR, rtnl.const.NLM_F_DUMP, {});
+    }
+    return ifs;
+};
+
 export function getInterfaceMAC(dev)
 {
-    const ifs = rtnl.request(rtnl.const.RTM_GETLINK, rtnl.const.NLM_F_DUMP, {});
+    const ifs = getNetworkInterfaces();
     for (let i = 0; i < length(ifs); i++) {
         const iface = ifs[i];
         if (iface.dev == dev && iface.address) {

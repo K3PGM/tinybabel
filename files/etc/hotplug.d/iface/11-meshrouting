@@ -10,6 +10,8 @@
 #        Route to the supernode (if there is one). If this is a supernode, then a blackhole route.
 # 22 - Default WAN route (IN) - BABEL
 #        A default route imported from another babel node.
+# 23 - Local default WAN route (IN) - BABEL
+#        THe default route provided on the DtD network
 # 27 - Local WAN route
 #        This is the local subnet of the WAN and is used for LAN & LOCAL.
 # 28 - Default WAN route from this node (OUT) - BABEL
@@ -32,31 +34,33 @@
 # THRU traffic, regardless of course, requires one set of rules. Hopefully this can be the ALL.
 # LOCAL traffic, which originates on this node, is like THRU traffic, except can always use the local WAN.
 #
-# LAN     - 29, 20, 21, 27, (28), (22), 99        ---  28 if LAN->WAN, 22 if LAN->MESH-WAN
-# THRU    - 29, 20, 21,     (28),  22,  99        ---  28 if MESH->WAN
-# LOCAL   - 29, 20, 21, 27,  28,   22,      main
+# LAN     - 29, 20, 21, 27, (28), (23), (22), 99        ---  28, 23 if LAN->WAN, 22 if LAN->MESH-WAN
+# THRU    - 29, 20, 21,     (28), (23),  22,  99        ---  28, 23 if MESH->WAN
+# LOCAL   - 29, 20, 21, 27,  28,   23    22,      main
 #
 
-if [ "$ACTION" = "ifdown" ] || [ "$ACTION" = "ifup" ] ; then
+if [ "${ACTION}" = "ifdown" ] || [ "${ACTION}" = "ifup" ] ; then
   #
   # We use the loopback interface to teardown/setup the 'all' rules which are used for all LOCAL traffic.
   # We only do this once, and the rules go at the end so this is special cased here.
   #
-  if [ "$INTERFACE" == "loopback" ] ; then
+  if [ "${INTERFACE}" == "loopback" ] ; then
     ip rule del pref 110 lookup 29
     ip rule del pref 120 lookup 20
     ip rule del pref 130 lookup 21
     ip rule del pref 140 lookup 27
     ip rule del pref 150 lookup 28
-    ip rule del pref 160 lookup 22
+    ip rule del pref 160 lookup 23
+    ip rule del pref 170 lookup 22
 
-    if [ "$ACTION" = "ifup" ] ; then
+    if [ "${ACTION}" = "ifup" ] ; then
       ip rule add pref 110 lookup 29
       ip rule add pref 120 lookup 20
       ip rule add pref 130 lookup 21
       ip rule add pref 140 lookup 27
       ip rule add pref 150 lookup 28
-      ip rule add pref 160 lookup 22
+      ip rule add pref 160 lookup 23
+      ip rule add pref 170 lookup 22
       #
       # We setup table 99 as the blackhole
       #
@@ -67,15 +71,19 @@ if [ "$ACTION" = "ifdown" ] || [ "$ACTION" = "ifup" ] ; then
   #
   # When we bring up the WAN interface, setup the subnet in table 27 and the default route in table 28.
   #
-  if [ "$INTERFACE" = "wan" ]; then
+  if [ "${INTERFACE}" = "wan" ]; then
     wan_net=$(ip route | grep "dev $DEVICE scope link" | sed 's/ .*$//')
     ip route del $wan_net table 27
     ip route del default table 28
-    if [ "$ACTION" = "ifup" ] ; then
-      wan_gw=$(ip route | grep ^default.*$DEVICE | sed 's/^default via \(.*\) dev.*$/\1/')
+    if [ "${ACTION}" = "ifup" ] ; then
+      wan_gw=$(ip route | grep ^default.*${DEVICE} | sed 's/^default via \(.*\) dev.*$/\1/')
       if [ "$wan_gw" != "" ]; then
         ip route add $wan_net dev $DEVICE table 27
         ip route add default via $wan_gw table 28
+        if [ "$(uci -q get aredn.@wan[0].local_defaultroute)" = "1" ]; then
+          ip route add 0.0.0.0/1 via $wan_gw table 28
+          ip route add 128.0.0.0/1 via $wan_gw table 28
+        fi
       fi
     fi
   fi
@@ -83,11 +91,11 @@ if [ "$ACTION" = "ifdown" ] || [ "$ACTION" = "ifup" ] ; then
   #
   # When we bring up the LAN interface, setup the lan subnet in table 29.
   #
-  if [ "$INTERFACE" = "lan" ]; then
+  if [ "${INTERFACE}" = "lan" ]; then
     lan_ipaddr=$(uci -q get network.lan.ipaddr)
     lan_netmask=$(uci -q get network.lan.netmask)
     lan_networkip=$(ipcalc.sh $lan_ipaddr $lan_netmask|grep NETWORK|cut -d'=' -f2)
-    ip route add $lan_networkip/$lan_netmask dev $DEVICE table 29
+    ip route add $lan_networkip/$lan_netmask dev ${DEVICE} table 29
   fi
 
   #
@@ -98,12 +106,12 @@ if [ "$ACTION" = "ifdown" ] || [ "$ACTION" = "ifup" ] ; then
   RULE27="0"
   RULE28="0"
   RULE22="0"
-  if [ "$INTERFACE" == "lan" ] ; then
+  if [ "${INTERFACE}" == "lan" ] ; then
     # LAN
     RULE27="1"
     RULE28="$(uci -q get aredn.@wan[0].lan_dhcp_route)" # LAN -> WAN
     RULE22="$(uci -q get aredn.@wan[0].lan_to_remote_wan)" # LAN -> MESH-WAN
-  elif [ "$INTERFACE" == "wifi" ] || [ "$INTERFACE" == "dtdlink" ] || [ "${INTERFACE:0:3}" == "tun" ] || [ "${INTERFACE:0:2}" = "wg" ] || [ "$(uci -q -c /etc/config.mesh/ show xlink | grep "ifname='${DEVICE}'")" != "" ] ; then
+  elif [ "${INTERFACE:0:4}" == "wifi" ] || [ "${INTERFACE}" == "dtdlink" ] || [ "${INTERFACE:0:2}" = "wg" ] || [ "$(uci -q -c /etc/config.mesh/ show xlink | grep "ifname='${DEVICE}'")" != "" ] ; then
     # THRU
     RULE28="$(uci -q get aredn.@wan[0].mesh_to_local_wan)" # MESH -> WAN
     RULE22="1"
@@ -114,28 +122,30 @@ if [ "$ACTION" = "ifdown" ] || [ "$ACTION" = "ifup" ] ; then
   fi
 
   # Clear away any rules which may already exist
-  ip rule del pref 10 iif $DEVICE lookup 29
-  ip rule del pref 20 iif $DEVICE lookup 20
-  ip rule del pref 30 iif $DEVICE lookup 21
-  ip rule del pref 40 iif $DEVICE lookup 27
-  ip rule del pref 50 iif $DEVICE lookup 28
-  ip rule del pref 60 iif $DEVICE lookup 22
-  ip rule del pref 70 iif $DEVICE lookup 99
+  ip rule del pref 10 iif ${DEVICE} lookup 29
+  ip rule del pref 20 iif ${DEVICE} lookup 20
+  ip rule del pref 30 iif ${DEVICE} lookup 21
+  ip rule del pref 40 iif ${DEVICE} lookup 27
+  ip rule del pref 50 iif ${DEVICE} lookup 28
+  ip rule del pref 60 iif ${DEVICE} lookup 23
+  ip rule del pref 70 iif ${DEVICE} lookup 22
+  ip rule del pref 80 iif ${DEVICE} lookup 99
 
-  if [ "$ACTION" = "ifup" ] ; then
-    ip rule add pref 10 iif $DEVICE lookup 29
-    ip rule add pref 20 iif $DEVICE lookup 20
-    ip rule add pref 30 iif $DEVICE lookup 21
-    if [ "$RULE27" = "1" ]; then
-      ip rule add pref 40 iif $DEVICE lookup 27
+  if [ "${ACTION}" = "ifup" ] ; then
+    ip rule add pref 10 iif ${DEVICE} lookup 29
+    ip rule add pref 20 iif ${DEVICE} lookup 20
+    ip rule add pref 30 iif ${DEVICE} lookup 21
+    if [ "${RULE27}" = "1" ]; then
+      ip rule add pref 40 iif ${DEVICE} lookup 27
     fi
-    if [ "$RULE28" = "1" ]; then
-      ip rule add pref 50 iif $DEVICE lookup 28
+    if [ "${RULE28}" = "1" ]; then
+      ip rule add pref 50 iif ${DEVICE} lookup 28
+      ip rule add pref 60 iif ${DEVICE} lookup 23
     fi
-    if [ "$RULE22" = "1" ]; then
-      ip rule add pref 60 iif $DEVICE lookup 22
+    if [ "${RULE22}" = "1" ]; then
+      ip rule add pref 70 iif ${DEVICE} lookup 22
     fi
-    ip rule add pref 70 iif $DEVICE lookup 99
+    ip rule add pref 80 iif ${DEVICE} lookup 99
   fi
 fi
 
