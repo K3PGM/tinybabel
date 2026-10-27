@@ -1,6 +1,6 @@
 /*
  * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
- * Copyright (C) 2025 Tim Wilkinson
+ * Copyright (C) 2025,2026 Tim Wilkinson
  * See Contributors file for additional contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -31,12 +31,11 @@
  * version
  */
 
-import * as nl80211 from "nl80211";
-
 const IW = "/usr/sbin/iw";
 const PING6 = "/bin/ping6";
 const IFUP = "/sbin/ifup";
 const IFDOWN = "/sbin/ifdown";
+const WIFI = "/sbin/wifi";
 
 const devices = radios.getMeshRadios();
 if (length(devices) === 0) {
@@ -87,9 +86,11 @@ function resetNetwork(device, op)
                             scan(device);
                             break;
                         case "restart":
-                            const idx = replace(device.iface, /^wlan/, "");
-                            system(`${IFDOWN} wifi${idx}; ${IFUP} wifi${idx}`);
+                        {
+                            const wifi = replace(device.iface, /^wlan/, "wifi");
+                            system(`${IFDOWN} ${wifi}; ${IFUP} ${wifi}`);
                             break;
+                        }
                         default:
                             log.syslog(log.LOG_ERR, `-- unknown`);
                             break;
@@ -97,25 +98,58 @@ function resetNetwork(device, op)
                     break;
                 case "meshsta":
                     switch (op) {
+                        case "unresponsive":
+                        {
+                            const radio = replace(device.iface, /^wlan/, "radio");
+                            system(`${WIFI} down ${radio}; ${WIFI} up ${radio}`);
+                            break;
+                        }
                         case "zero-hard":
                             scan(device);
                             break;
                         default:
+                            log.syslog(log.LOG_ERR, `-- unknown`);
                             break;
                     }
                     break;
                 default:
+                    log.syslog(log.LOG_ERR, `-- unknown`);
                     break;
             }
             break;
         case "morse":
-            if (op === "restart") {
-                const idx = replace(device.iface, /^wlan/, "");
-                system(`${IFDOWN} wifi${idx}; ${IFUP} wifi${idx}`);
+            switch (device.mode) {
+                default:
+                    switch (op) {
+                        case "restart":
+                        {
+                            const wifi = replace(device.iface, /^wlan/, "wifi");
+                            system(`${IFDOWN} ${wifi}; ${IFUP} ${wifi}`);
+                            break;
+                        }
+                        default:
+                            log.syslog(log.LOG_NOTICE, `-- ignored`);
+                            break;
+                    }
+                    break;
             }
             break;
         case "mt76":
-            log.syslog(log.LOG_NOTICE, `-- ignored`);
+            switch (device.mode) {
+                case "meshsta":
+                    switch (op) {
+                        case "unresponsive":
+                            scan(device);
+                            break;
+                        default:
+                            log.syslog(log.LOG_NOTICE, `-- ignored`);
+                            break;
+                    }
+                    break;
+                default:
+                    log.syslog(log.LOG_NOTICE, `-- ignored`);
+                    break;
+            }
             break;
         default:
             break;
@@ -136,19 +170,22 @@ function monitorUnresponsiveStations(device)
     const stations = hardware.getStations(device.iface);
     for (let i = 0; i < length(stations); i++) {
         if (!blocks[stations[i].mac]) {
-            const ipv6ll = network.mac2ipv6ll(stations[i].mac);
-            if (system(`${PING6} -c 1 -W 2 -I br-wifi ${ipv6ll} > /dev/null 2>&1`) == 0 || system(`${PING6} -c 1 -W 2 -I ${device.iface} ${ipv6ll} > /dev/null 2>&1`) == 0) {
-                nstations[ipv6ll] = 0;
-            }
-            else {
-                const val = (device.unresponsive.stations[ipv6ll] || 0) + 1;
-                nstations[ipv6ll] = val;
-                if (val < device.unresponsive.ignore) {
-                    if (val > actionLimits.unresponsiveReport) {
-                        log.syslog(log.LOG_ERR, `Possible unresponsive node: ${ipv6ll} [${stations[i].mac}]`);
-                    }
-                    if (val > device.unresponsive.max) {
-                        device.unresponsive.max = val;
+            const tracker = lqm.getTrackerByMac(stations[i].mac);
+            if (tracker) {
+                const ipv6ll = tracker.ipv6ll;
+                if (system(`${PING6} -c 1 -W 2 -I br-wifi ${ipv6ll} > /dev/null 2>&1`) == 0 || system(`${PING6} -c 1 -W 2 -I ${device.iface} ${ipv6ll} > /dev/null 2>&1`) == 0) {
+                    nstations[ipv6ll] = 0;
+                }
+                else {
+                    const val = (device.unresponsive.stations[ipv6ll] || 0) + 1;
+                    nstations[ipv6ll] = val;
+                    if (val < device.unresponsive.ignore) {
+                        if (val > actionLimits.unresponsiveReport) {
+                            log.syslog(log.LOG_ERR, `Possible unresponsive node: ${ipv6ll} [${stations[i].mac}]`);
+                        }
+                        if (val > device.unresponsive.max) {
+                            device.unresponsive.max = val;
+                        }
                     }
                 }
             }
@@ -256,6 +293,7 @@ function save()
 
 function main()
 {
+    lqm.reset();
     map(devices, device => monitorUnresponsiveStations(device));
     map(devices, device => monitorStationCount(device));
     runCommonActions();

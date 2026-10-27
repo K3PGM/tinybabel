@@ -380,10 +380,11 @@ function main()
                     track.tx_packets = station.sta_info.tx_packets;
                     track.tx_retries = station.sta_info.tx_retries;
                     track.tx_fail = station.sta_info.tx_failed;
-                    if (station.sta_info.tx_bitrate) {
+                    // Some wifi driver report 6Mbps when idle (the base speed) which messes up this calculation. Ignore those
+                    if (station.sta_info.tx_bitrate && station.sta_info.tx_bitrate.bitrate > 60) {
                         track.tx_bitrate = station.sta_info.tx_bitrate.bitrate * channelBwScale;
                     }
-                    if (station.sta_info.rx_bitrate) {
+                    if (station.sta_info.rx_bitrate && station.sta_info.rx_bitrate.bitrate > 60) {
                         track.rx_bitrate = station.sta_info.rx_bitrate.bitrate * channelBwScale;
                     }
                     if (track.snr !== null) {
