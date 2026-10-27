@@ -65,6 +65,7 @@ for (let server in servers) {
     if (passwd) {
         c.set("wireguard", name, "key", passwd);
         c.set("wireguard", name, "passwd", "");
+        c.set("wireguard", name, "mtu", "1420");
     }
 }
 
@@ -77,6 +78,7 @@ for (let client in clients) {
         const ipport = split(clientip, ":");
         c.set("wireguard", name, "port", ipport[1]);
         c.set("wireguard", name, "clientip", "");
+        c.set("wireguard", name, "mtu", "1420");
     }
 }
 

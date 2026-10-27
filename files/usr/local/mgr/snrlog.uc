@@ -69,7 +69,7 @@ function main()
         const noise = hardware.getRadioNoise(device.iface);
 
         // Get all the stations
-        const stations = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: device.iface });
+        const stations = hardware.getStations(device.iface);
         for (let i = 0; i < length(stations); i++) {
             const s = stations[i];
             const datafile = `${TMPDIR}${s.mac}`;

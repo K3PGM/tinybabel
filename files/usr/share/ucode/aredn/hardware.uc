@@ -640,7 +640,7 @@ export function getRadioNoise(wifiIface)
         }
     }
     if (getRadioType(wifiIface) === "halow") {
-        const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} stats | grep 'Noise (dBm)'`);
+        const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} stats 2>/dev/null | grep 'Noise (dBm)'`);
         if (p) {
             const m = match(p.read("all"), /: (-\d+)/);
             p.close();
@@ -652,19 +652,63 @@ export function getRadioNoise(wifiIface)
     return -95;
 };
 
+export function getStations(wifiIface)
+{
+    const stations = [];
+    const wlans = [ wifiIface, ...map(fs.glob(`/sys/class/net/${wifiIface}.sta*`), w => fs.basename(w)) ];
+    for (let w = 0; w < length(wlans); w++) {
+        const info = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: wlans[w] });
+        if (type(info) === "array") {
+            push(stations, ...info);
+        }
+    }
+    return stations;
+};
+
+export function getStation(wifiIface, macAddress)
+{
+    return nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, 0, { dev: wifiIface, mac: macAddress });
+};
+
+export function getCurrentFrequency(wifiIface)
+{
+    switch (getRadioType(wifiIface)) {
+        case "none":
+            return null;
+        case "halow":
+            const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} channel -j 2>/dev/null`);
+            if (p) {
+                const all = p.read("all");
+                p.close();
+                try {
+                    return json(all).channel_frequency / 1000;
+                }
+                catch (_) {
+                }
+            }
+            return null;
+        default:
+            const iface = nl80211.request(nl80211.const.NL80211_CMD_GET_INTERFACE, nl80211.const.NLM_F_DUMP, { dev: wifiIface });
+            return iface?.[0]?.wiphy_freq;
+    }
+};
+
 export function getMaxDistance(wifiIface)
 {
     switch (getRadioType(wifiIface)) {
         case "none":
             return -1;
         case "halow":
-            const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} get ack_timeout_adjust`);
+            const p = fs.popen(`/sbin/morse_cli -i ${wifiIface} get ack_timeout_adjust 2>/dev/null`);
             if (p) {
-                const ack = p.read("all");
+                const ack = trim(p.read("all"));
                 p.close();
-                return (int(ack) - 300) / 0.0067;
+                const iack = int(ack);
+                if (ack == iack) {
+                    return (iack - 300) / 0.0067;
+                }
             }
-            return -1;
+            return 0;
         default:
             const info = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, 0, { wiphy: int(substr(getPhyDevice(wifiIface), 3)) });
             return info.wiphy_coverage_class * 450;
@@ -872,6 +916,7 @@ export function getEthernetPorts()
             return default5PortLayout;
         case "glinet,gl-a1300":
         case "glinet,gl-b1300":
+        case "glinet,gl-mt1300":
             return default3PortLayout;
         case "openwrt,one":
         case "cudy,tr3000-v1":
