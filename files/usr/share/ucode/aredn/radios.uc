@@ -51,9 +51,9 @@ const bandsAvailable = {
         "20": [ -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ]
     },
     "5GHz": {
-        "20": [ 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165, 169, 173, 177, 181 ],
-        "40": [ 36, 44, 52, 60, 100, 108, 116, 124, 132, 140, 149, 157, 165, 173 ],
-        "80": [ 36, 44, 52, 60, 100, 108, 116, 124, 132, 140, 149, 157, 165, 173 ],
+        "20": [ 32, 36, 40, 44, 60, 68, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165, 169, 173, 177, 181, 182, 183 ],
+        "40": [ 36, 100, 108, 116, 124, 132, 140, 149, 157, 165, 173 ],
+        "80": [ 36, 100, 108, 116, 124, 132, 140, 149, 157, 165, 173 ],
         "160": [ 36, 100, 149 ]
     },
     "HaLow": {
@@ -266,6 +266,7 @@ export function getConfiguration()
         radio[0].mode = {
             mode: mode,
             channel: configuration.getSettingAsInt("radio0_channel"),
+            channels: configuration.getSettingAsList("radio0_channels"),
             bandwidth: configuration.getSettingAsInt("radio0_bandwidth"),
             ssid: configuration.getSettingAsString("radio0_ssid"),
             txpower: configuration.getSettingAsInt("radio0_txpower"),
@@ -281,6 +282,7 @@ export function getConfiguration()
         radio[1].mode = {
             mode: mode,
             channel: configuration.getSettingAsInt("radio1_channel"),
+            channels: configuration.getSettingAsList("radio1_channels"),
             bandwidth: configuration.getSettingAsInt("radio1_bandwidth"),
             ssid: configuration.getSettingAsString("radio1_ssid"),
             txpower: configuration.getSettingAsInt("radio1_txpower"),

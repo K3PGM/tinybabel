@@ -75,11 +75,14 @@ function updateConfig()
 {
     const c = uci.cursor();
     const cm = uci.cursor("/etc/config.mesh");
-    const max_distance = cm.get("setup", "globals", `${radio}_distance`) || default_max_distance;
     config = {
-        max_distance: max_distance > 0 ? max_distance : default_max_distance,
+        max_distance: {},
         user_blocks: c.get("aredn", "@lqm[0]", "user_blocks")
     };
+    map(devices, device => {
+        const max_distance = cm.get("setup", "globals", `${device.radio}_distance`) || default_max_distance;
+        config.max_distance[device.wlan] = max_distance > 0 ? max_distance : default_max_distance;
+    });
 }
 
 function refreshTimeout()
@@ -188,10 +191,10 @@ function deviceToType(device, mac)
     if (device == "br-dtdlink") {
         return "DtD";
     }
-    else if (substr(device, 0, 4) === "wlan") {
+    else if (substr(device, 0, 4) === "wlan" || device === "br-wifi") {
         return "RF";
     }
-    else if (device === "br-wifi" || device === "br-fast" || device === "br-lan") {
+    else if (device === "br-fast" || device === "br-lan") {
         return "RRF";
     }
     else if (substr(device, 0, 2) === "wg") {
@@ -224,7 +227,7 @@ function main()
             case "halow":
             case "ax":
             case "ac":
-                device.lastDistance = config.max_distance;
+                device.lastDistance = config.max_distance[device.wlan];
                 if (hardware.supportsFeature("max-distance", device.wlan)) {
                     device.lastReadDistance = hardware.setMaxDistance(device.wlan, device.lastDistance);
                 }
@@ -253,7 +256,6 @@ function main()
         updateConfig();
 
         const cursor = uci.cursor();
-        const cursorm = uci.cursor("/etc/config.mesh");
         let refresh = false;
 
         const lat = cursor.get("aredn", "@location[0]", "lat") ? 1 * cursor.get("aredn", "@location[0]", "lat") : null;
@@ -269,6 +271,7 @@ function main()
             }
         });
         cursor.foreach("network", "bridge-vlan", section => {
+            const name = section[".name"];
             if (substr(name, 0, 3) === "rrf") {
                 rwifi[section.vlan] = true;
             }
@@ -364,35 +367,32 @@ function main()
             // NOTE. THE nl80211 api report bitrates x10 so we need to reduce this by 10 here.
             const chanbw = int(cursor.get("wireless", device.radio, "chanbw") || "20");
             const channelBwScale = (device.type === "halow" ? 1 : min(20, chanbw)) / 200.0;
-            const wlans = [ device.wlan, ...map(fs.glob(`/sys/class/net/${device.wlan}.sta*`), w => fs.basename(w)) ];
             const band = hardware.getDefaultChannel(device.wlan)?.band;
-            for (let w = 0; w < length(wlans); w++) {
-                const stations = nl80211.request(nl80211.const.NL80211_CMD_GET_STATION, nl80211.const.NLM_F_DUMP, { dev: wlans[w] });
-                for (let i = 0; i < length(stations); i++) {
-                    const station = stations[i];
-                    const track = trackers[station.mac] || trackers[replace(station.mac, /^..:/, "fe:")];
-                    if (track) {
-                        track.type = "RF";
-                        track.subdevice = wlans[w];
-                        track.band = band;
-                        track.signal = station.sta_info.signal;
-                        track.tx_packets = station.sta_info.tx_packets;
-                        track.tx_retries = station.sta_info.tx_retries;
-                        track.tx_fail = station.sta_info.tx_failed;
-                        if (station.sta_info.tx_bitrate) {
-                            track.tx_bitrate = station.sta_info.tx_bitrate.bitrate * channelBwScale;
-                        }
-                        if (station.sta_info.rx_bitrate) {
-                            track.rx_bitrate = station.sta_info.rx_bitrate.bitrate * channelBwScale;
-                        }
-                        if (track.snr !== null) {
-                            track.snr = max(0, round(track.snr * snr_run_avg + (track.signal - noise) * (1 - snr_run_avg)));
-                        }
-                        else {
-                            track.snr = max(0, track.signal - noise);
-                        }
-                        track.connected_time = station.sta_info.connected_time;
+            const stations = hardware.getStations(device.wlan);
+            for (let i = 0; i < length(stations); i++) {
+                const station = stations[i];
+                const track = lqm.getTrackerByMac(station.mac, trackers);
+                if (track) {
+                    track.type = "RF";
+                    track.subdevice = station.dev;
+                    track.band = band;
+                    track.signal = station.sta_info.signal;
+                    track.tx_packets = station.sta_info.tx_packets;
+                    track.tx_retries = station.sta_info.tx_retries;
+                    track.tx_fail = station.sta_info.tx_failed;
+                    if (station.sta_info.tx_bitrate) {
+                        track.tx_bitrate = station.sta_info.tx_bitrate.bitrate * channelBwScale;
                     }
+                    if (station.sta_info.rx_bitrate) {
+                        track.rx_bitrate = station.sta_info.rx_bitrate.bitrate * channelBwScale;
+                    }
+                    if (track.snr !== null) {
+                        track.snr = max(0, round(track.snr * snr_run_avg + (track.signal - noise) * (1 - snr_run_avg)));
+                    }
+                    else {
+                        track.snr = max(0, track.signal - noise);
+                    }
+                    track.connected_time = station.sta_info.connected_time;
                 }
             }
         });
@@ -694,12 +694,12 @@ function main()
             }
 
             // Calculate the max RF distance as we go
-            if (track.type == "RF" && track.lastseen >= now && track.subdevice) {
+            if (track.type == "RF" && track.lastseen >= now && track.subdevice && !track.user_blocks) {
                 const device = split(track.subdevice, ".")[0];
                 if (track.distance === null) {
-                    distances[device] = config.max_distance
+                    distances[device] = config.max_distance[device];
                 }
-                else if (!track.user_blocks && track.distance > (distances[device] ?? -1)) {
+                else if (track.distance !== null && track.distance > (distances[device] ?? -1)) {
                     distances[device] = track.distance;
                 }
             }
@@ -759,10 +759,10 @@ function main()
                 // Update the wifi distances
                 let distance = distances[device.wlan];
                 if (distance === null) {
-                    distance = config.max_distance;
+                    distance = config.max_distance[device.wlan];
                 }
                 else {
-                    distance = min(distance, config.max_distance);
+                    distance = min(distance, config.max_distance[device.wlan]);
                 }
                 if (hardware.supportsFeature("max-distance", device.wlan) && (distance != device.lastDistance || device.lastReadDistance != hardware.getMaxDistance(device.wlan))) {
                     device.lastDistance = distance;
